@@ -1,8 +1,28 @@
 import sys
+import os
+import faulthandler
+import traceback
 import argparse
 from PyQt6.QtWidgets import QApplication
 from config import Config, VERSION
 from terminal_ui import MainWindow
+
+# Enable fault handler to log segfaults — write next to the exe
+if getattr(sys, "frozen", False):
+    _app_dir = os.path.dirname(sys.executable)
+else:
+    _app_dir = os.getcwd()
+_log_path = os.path.join(_app_dir, "errors.txt")
+faulthandler.enable(file=open(_log_path, "w"))
+
+# Catch all unhandled exceptions
+def _excepthook(exc_type, exc_value, exc_tb):
+    with open(_log_path, "a") as f:
+        f.write("=== Unhandled exception ===\n")
+        traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
+        f.write("\n")
+
+sys.excepthook = _excepthook
 
 
 def parse_args():

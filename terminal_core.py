@@ -194,10 +194,14 @@ class TerminalEngine:
                 if self.pty:
                     text = self.pty.read(1024)
                     if text:
+                        if isinstance(text, bytes):
+                            text = text.decode("utf-8", errors="replace")
                         self.signals.text_ready.emit(text)
-                time.sleep(0.01)
+            except EOFError:
+                break
             except Exception:
                 break
+            time.sleep(0.01)
 
         self.alive = False
         self.is_ready = False

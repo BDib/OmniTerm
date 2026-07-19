@@ -2,16 +2,16 @@
 
 A lightweight, extensible Windows terminal emulator built with Python, PyQt6, and `winpty`.
 
-OmniTerm provides a clean, modern GUI wrapper around the Windows Pseudo Console (ConPTY) via `winpty`, giving you a fast terminal experience with a dark theme, ANSI stripping, and a thread-safe architecture designed for future extensibility (RTL text, theming, split panes, etc.).
+OmniTerm provides a clean, modern GUI wrapper around the Windows Pseudo Console (ConPTY) via `winpty`, giving you a fast terminal experience with full ANSI color rendering, dark themes, multi-tab support, SSH/Serial/WSL integration, and a thread-safe architecture.
 
 ---
 
 ## Features
 
 - **Pseudo Console Backend** — Uses `winpty` to spawn and manage real shell processes (`cmd.exe`, PowerShell, WSL, etc.) with full PTY support.
+- **Full ANSI Color Rendering** — Complete SGR parser with 256-color and true-color (RGB) support, bold, italic, underline, inverse, and strikethrough.
 - **3 Built-in Themes** — Campbell (default), Solarized Dark, and One Half Dark with `Ctrl+,` theme picker.
 - **Dark Terminal Theme** — Campbell-inspired dark UI with `Cascadia Code` / `Consolas` monospace font.
-- **ANSI Color Rendering** — Full SGR parser with 256-color and true-color (RGB) support, bold, italic, underline, inverse, and strikethrough.
 - **Cursor Movement** — Handles `\x1b[A/B/C/D` (up/down/forward/back), `\x1b[H` (home), `\x1b[J` (clear screen), `\x1b[K` (clear line).
 - **--plain Mode** — Strip all ANSI escapes for environments where color rendering isn't needed.
 - **Thread-Safe I/O** — Dedicated reader and writer threads prevent blocking the GUI while communicating with the shell.
@@ -28,15 +28,14 @@ OmniTerm provides a clean, modern GUI wrapper around the Windows Pseudo Console 
 - **Named Profiles** — Define shell profiles in `settings.toml` (cmd, PowerShell, WSL, Git Bash) with `Ctrl+Shift+N` profile picker.
 - **Custom Keybindings** — Remap shortcuts to built-in actions via `settings.toml`.
 - **Find / Search** — `Ctrl+F` opens a search bar with match highlighting and navigation.
-- **Minimal Footprint** — Pure Python with no native compilation required.
 - **Copy & Paste** — `Ctrl+C` / `Ctrl+V` for clipboard integration.
-- **Arrow Keys & Shortcuts** — Full arrow key, Home/End, Page Up/Down, and Ctrl组合 support.
+- **Arrow Keys & Shortcuts** — Full arrow key, Home/End, Page Up/Down, and Ctrl combinations.
 - **Exit Detection** — Displays `[Process exited]` when the shell terminates.
 - **Window Persistence** — Remembers window position and size across launches.
 - **Font Shortcuts** — `Ctrl+=` / `Ctrl+-` to resize, `Ctrl+0` to reset, `Ctrl+Shift+T` to cycle themes.
 - **Cursor Styles** — Configurable bar, block, or underline cursor with optional blinking.
 - **Transparency Toggle** — `Ctrl+Shift+O` toggles between opaque and configured transparency.
-- **PyInstaller Ready** — Build a standalone `.exe` with `build.bat`.
+- **PyInstaller Ready** — Build a standalone `.exe` with `build.bat` (cmd) or `.\build.ps1` (PowerShell).
 - **CI/CD Pipeline** — GitHub Actions runs tests on Python 3.10–3.13, builds and attaches `.exe` to releases on tag push.
 - **CLI Arguments** — `--shell`, `--profile`, `--plain`, `--config`, `--version`.
 
@@ -65,7 +64,8 @@ OmniTerm/
 ├── settings.toml        # User configuration (profiles, keybindings, theme, cursor)
 ├── requirements.txt     # Python dependencies (PyQt6, paramiko, pyserial, pywinpty)
 ├── OmniTerm.spec        # PyInstaller spec — standalone .exe build
-├── build.bat            # Build script — one-click packaging (release/debug/clean)
+├── build.bat            # Build script (cmd) — one-click packaging (release/debug/clean)
+├── build.ps1            # Build script (PowerShell) — same as build.bat for PS users
 ├── LICENSE              # MIT License
 ├── .gitignore           # Python/IDE/build ignores
 ├── .github/
@@ -105,7 +105,7 @@ OmniTerm follows a clean **Engine / UI separation** pattern:
 │   (terminal_core)   │   │   TerminalWidget (terminal_ui) │
 │                     │   │                            │
 │  ┌───────────────┐  │   │  QTextEdit subclass        │
-│  │ winpty Pty    │  │   │  - ANSI stripping          │
+│  │ winpty Pty    │  │   │  - ANSI color rendering    │
 │  │   Process     │  │   │  - Key event forwarding    │
 │  └───────┬───────┘  │   │  - Dark theme styling      │
 │          │          │   │                            │
@@ -119,7 +119,7 @@ OmniTerm follows a clean **Engine / UI separation** pattern:
 ### Data Flow
 
 1. **Startup** — `Main.py` creates a `TerminalEngine` (spawns `cmd.exe` via `winpty`) and a `MainWindow`.
-2. **Output** — The engine's reader thread reads from the PTY and emits `text_ready(str)` signals. The UI's `append_shell_text` slot strips ANSI codes and appends plain text.
+2. **Output** — The engine's reader thread reads from the PTY and emits `text_ready(str)` signals. The UI's `append_shell_text` slot parses ANSI codes and renders styled text.
 3. **Input** — `TerminalWidget.keyPressEvent` captures keystrokes and forwards them to `engine.write()`, which queues data for the writer thread to send to the PTY.
 4. **Shutdown** — `engine.kill()` terminates the PTY process and stops both threads.
 
@@ -159,6 +159,9 @@ OmniTerm can be packaged into a single Windows executable using PyInstaller:
 # Quick build (double-click build.bat)
 build.bat
 
+# Or with PowerShell
+.\build.ps1
+
 # Or manually
 pip install pyinstaller
 pyinstaller OmniTerm.spec --noconfirm
@@ -169,6 +172,7 @@ The output will be at `dist/OmniTerm.exe`. This is a self-contained executable t
 ```bash
 # Debug build (console visible for troubleshooting)
 build.bat debug
+.\build.ps1 debug
 ```
 
 ### Dependencies
@@ -180,6 +184,8 @@ build.bat debug
 | `toml` | Configuration file parsing |
 | `python-bidi` | Bidirectional text algorithm (RTL support) |
 | `arabic-reshaper` | Arabic ligature shaping for proper display |
+| `paramiko` | SSH client library for remote connections |
+| `pyserial` | Serial port communication for hardware/embedded work |
 
 ---
 
@@ -200,7 +206,30 @@ rtl_threshold = 0.7
 opacity = 0.98
 font_family = "Cascadia Code"
 font_size = 14
-theme = "campbell" # Future-proofing for color schemes
+theme = "campbell"
+
+# Cursor style: "bar" | "block" | "underline"
+cursor_style = "bar"
+# Whether the cursor blinks
+cursor_blink = true
+
+# Shell profiles
+default_profile = "cmd"
+
+[profiles.cmd]
+command = "cmd.exe"
+
+[profiles.powershell]
+command = "powershell.exe"
+args = ["-NoLogo"]
+
+[profiles.wsl]
+command = "wsl.exe"
+
+# Custom keybindings
+[keybindings]
+"Ctrl+Shift+N" = "profile_picker"
+"Ctrl+Shift+F" = "find"
 ```
 
 ### Settings Reference
@@ -211,7 +240,9 @@ theme = "campbell" # Future-proofing for color schemes
 | `ui` | `opacity` | `float` | `0.98` | Window opacity (0.0 = transparent, 1.0 = opaque) |
 | `ui` | `font_family` | `string` | `"Cascadia Code"` | Monospace font family (fallback: Consolas) |
 | `ui` | `font_size` | `int` | `14` | Font size in pixels |
-| `ui` | `theme` | `string` | `"campbell"` | Color scheme name (reserved for future use) |
+| `ui` | `theme` | `string` | `"campbell"` | Color scheme name (campbell, solarized_dark, one_half_dark) |
+| `ui` | `cursor_style` | `string` | `"bar"` | Cursor style: bar, block, or underline |
+| `ui` | `cursor_blink` | `bool` | `true` | Whether the cursor blinks |
 
 ---
 
@@ -240,7 +271,7 @@ python Main.py --plain
 python Main.py --version
 ```
 
-This opens a 1000×650 terminal window running `cmd.exe` (or the specified shell).
+This opens a 1000x650 terminal window running `cmd.exe` (or the specified shell).
 
 ### Keyboard Shortcuts
 
@@ -286,26 +317,9 @@ This opens a 1000×650 terminal window running `cmd.exe` (or the specified shell
 | WSL Connect | `Ctrl+Shift+U` |
 | Find/Search | `Ctrl+F` |
 
-### Use a Different Shell
-
-To launch with PowerShell, WSL, or another shell, modify the `engine.start()` call in `Main.py`:
-
-```python
-# PowerShell
-engine.start(cmd='powershell.exe')
-
-# WSL (Windows Subsystem for Linux)
-engine.start(cmd='wsl.exe')
-
-# Git Bash
-engine.start(cmd='C:\\Program Files\\Git\\bin\\bash.exe')
-```
-
 ---
 
 ## Testing
-
-Unit tests cover configuration loading and the theme system:
 
 ```bash
 # Run all tests
@@ -332,45 +346,6 @@ python tests/test_themes.py
 
 ---
 
-## Diagnostics
-
-Two test scripts are included for troubleshooting PTY issues:
-
-### `test_pty.py` — Full PTY Diagnostic
-
-Runs a comprehensive check: spawns a PTY, executes `dir`, verifies output file creation, and reports the OS/Python environment.
-
-```bash
-python test_pty.py
-```
-
-Sample output:
-```
---- OmniTerm Diagnostic Tool ---
-OS: Windows 10 (10.0.19045)
-Python Version: 3.12.0 ...
-Current Directory: C:\...\OmniTerm
-
-[1] Attempting to spawn PTY with cmd.exe...
-    Success: PTY process spawned.
-[2] Executing command: dir > test.log
-[3] Waiting 2 seconds for command completion...
-[4] Checking for output file...
-    Success: test.log found with 25 lines.
-[5] Cleaning up...
-    PTY terminated.
-```
-
-### `nudge_test.py` — Line Ending Test
-
-Tests whether the PTY responds to CRLF (`\r\n`) or CR-only (`\r`) line endings:
-
-```bash
-python nudge_test.py
-```
-
----
-
 ## How It Works (Technical Deep Dive)
 
 ### PTY via winpty
@@ -388,17 +363,14 @@ The engine runs two daemon threads to avoid blocking the PyQt6 event loop:
 
 Both threads exit when `engine.alive` is set to `False`.
 
-### ANSI Stripping
+### ANSI Rendering
 
-Terminal output often contains ANSI escape sequences (colors, cursor movement, etc.). Since OmniTerm renders plain text, these are stripped with a compiled regex:
+Terminal output contains ANSI escape sequences for colors, cursor movement, and styling. OmniTerm parses these with a custom regex-based parser (`ansi_parser.py`) that emits `Span` objects, then maps each span to a `QTextCharFormat` for styled rendering in the `QTextEdit`. Supports:
 
-```python
-self.ansi_cleaner = re.compile(
-    r'(?:\x1b\][0-9];.*?\x07|\x1b[@-_][0-?]*[ -/]*[@-~])'
-)
-```
-
-Non-printable characters (below ASCII 32, except `\n`, `\r`, `\t`) are also filtered out.
+- 8 basic ANSI colors + 8 bright variants (mapped to theme palette)
+- 256-color indexed palette
+- True-color RGB (`\x1b[38;2;r;g;b m`)
+- Bold, dim, italic, underline, strikethrough, inverse
 
 ### Key Event Forwarding
 
@@ -406,40 +378,6 @@ Non-printable characters (below ASCII 32, except `\n`, `\r`, `\t`) are also filt
 
 ---
 
-## Extending OmniTerm
-
-### Adding Color Support
-
-Replace the ANSI stripper with a parser that maps SGR codes to `QTextCharFormat` objects. Use `QTextEdit.setExtraSelections()` or insert `QTextDocument` HTML for colored output.
-
-### Split Panes
-
-`MainWindow` can hold a `QSplitter` containing multiple `TerminalWidget` instances, each with its own `TerminalEngine`.
-
-### RTL Text Rendering
-
-The `settings.toml` already has `rtl_threshold` configured. Integration with `python-bidi` and `arabic-reshaper` is planned:
-
-1. Detect RTL character ratio in each output line.
-2. If ratio exceeds `rtl_threshold`, apply BiDi reordering.
-3. Reshape Arabic text for proper ligature display.
-
-### Theming
-
-The `theme` setting in `settings.toml` is reserved for future color scheme support. Each theme would define foreground, background, cursor, and ANSI color mappings.
-
----
-
-## Known Limitations
-
-- **Windows Only** — `winpty` is Windows-specific. Cross-platform support would require `pexpect` (Linux/macOS) or a unified backend.
-- **No ANSI Colors** — Output is plain text only. Color sequences are stripped rather than rendered.
-- **No Scrollback History** — `QTextEdit` provides basic scrolling but no configurable history buffer.
-- **No Tabbed Interface** — Single-window only. Tab support would require a `QTabWidget` wrapper.
-- **Fixed Font** — Font is set in the stylesheet; runtime font switching is not implemented.
-
----
-
 ## License
 
-This project does not currently include a license file. Contact the author for usage terms.
+MIT License — see [LICENSE](LICENSE) for details.

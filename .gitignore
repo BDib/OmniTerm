@@ -5,13 +5,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.egg-info/
-dist/
-build/
-*.spec.bak
-
-# PyInstaller
-*.manifest
-*.spec
 
 # Virtual environments
 .venv/
@@ -30,7 +23,12 @@ Desktop.ini
 .DS_Store
 
 # Build output
+build/
 dist/
+
+# PyInstaller generated (keep OmniTerm.spec tracked)
+*.spec.bak
+*.manifest
 
 # Logs
 *.log

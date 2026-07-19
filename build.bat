@@ -1,17 +1,24 @@
 @echo off
+setlocal
+cd /d "%~dp0"
+
 :: OmniTerm Build Script
 :: Builds a standalone Windows .exe using PyInstaller.
 ::
 :: Usage:
-::   build.bat          — Build in release mode
-::   build.bat debug    — Build in debug mode (console visible)
-::   build.bat clean    — Remove build artifacts
+::   build.bat          - Build in release mode
+::   build.bat debug    - Build in debug mode (console visible)
+::   build.bat clean    - Remove build artifacts
+::
+:: For PowerShell, use: .\build.ps1 [release|debug|clean]
+::
+:: IMPORTANT: Uses `python -m PyInstaller` to ensure the correct Python
+:: interpreter is used. If you have multiple Python installs, activate
+:: the right venv first.
 
-setlocal
-cd /d "%~dp0"
-
+echo.
 echo ============================================
-echo   OmniTerm v0.8 Build
+echo   OmniTerm Build
 echo ============================================
 echo.
 
@@ -19,7 +26,6 @@ if "%1"=="clean" (
     echo Cleaning build artifacts...
     if exist build rmdir /s /q build
     if exist dist rmdir /s /q dist
-    if exist OmniTerm.spec del OmniTerm.spec
     echo Done.
     goto :end
 )
@@ -32,27 +38,28 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-:: Display version info
+:: Display version
 python -c "from config import VERSION; print(f'Building OmniTerm v{VERSION}')"
 
-:: Check for PyInstaller
+:: Check for PyInstaller (via python -m to use correct interpreter)
 python -c "import PyInstaller" >nul 2>&1
 if %errorlevel% neq 0 (
     echo PyInstaller not found. Installing...
-    pip install pyinstaller
+    python -m pip install pyinstaller
 )
 
 :: Install dependencies
 echo Installing dependencies...
-pip install -r requirements.txt --quiet
+python -m pip install -r requirements.txt --quiet
 
-:: Build
+:: Build — always use `python -m PyInstaller` to avoid picking up
+:: a different Python's pyinstaller.exe from PATH.
 if "%1"=="debug" (
-    echo Building in DEBUG mode (console visible)...
-    pyinstaller OmniTerm.spec --noconfirm --console
+    echo Building in DEBUG mode ^(console visible^)...
+    python -m PyInstaller OmniTerm.spec --noconfirm --console
 ) else (
     echo Building in RELEASE mode...
-    pyinstaller OmniTerm.spec --noconfirm
+    python -m PyInstaller OmniTerm.spec --noconfirm
 )
 
 echo.

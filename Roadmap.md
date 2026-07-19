@@ -4,43 +4,40 @@ A Windows-focused development plan for building OmniTerm into a full-featured te
 
 ---
 
-## Phase 1 — Stability & Polish (v0.2)
+## Phase 1 — Stability & Polish (v0.2) ✅
 
 > Make what exists rock-solid before adding features.
 
 ### 1.1 Configuration Loading
 
-- [ ] Actually load `settings.toml` at startup and apply values (font, size, opacity, RTL threshold).
-- [ ] Add a `--config <path>` CLI flag to specify an alternate config file.
-- [ ] Gracefully handle missing/malformed config — fall back to defaults with a warning.
+- [x] Actually load `settings.toml` at startup and apply values (font, size, opacity, RTL threshold).
+- [x] Add a `--config <path>` CLI flag to specify an alternate config file.
+- [x] Gracefully handle missing/malformed config — fall back to defaults with a warning.
 
 ### 1.2 Window Improvements
 
-- [ ] Save and restore window position/size across launches (store in `%APPDATA%/OmniTerm/state.toml`).
+- [x] Save and restore window position/size across launches (store in `%APPDATA%/OmniTerm/state.toml`).
 - [ ] Set window icon (create a proper `.ico` asset).
-- [ ] Add a minimum window size constraint so the terminal can't be resized to zero.
+- [x] Add a minimum window size constraint so the terminal can't be resized to zero.
 
 ### 1.3 Process Robustness
 
-- [ ] Detect PTY process exit and display `[Process exited]` in the terminal instead of going silent.
-- [ ] Handle PTY spawn failures with a user-facing error dialog instead of a bare exception.
-- [ ] Add a "Restart Shell" action (`Ctrl+Shift+R`) that kills and respawns the PTY.
+- [x] Detect PTY process exit and display `[Process exited]` in the terminal instead of going silent.
+- [x] Handle PTY spawn failures with a user-facing error dialog instead of a bare exception.
+- [x] Add a "Restart Shell" action (`Ctrl+Shift+R`) that kills and respawns the PTY.
 
 ### 1.4 Copy & Paste
 
-- [ ] Enable `Ctrl+C` to copy selected text when text is selected, and send `SIGINT`-equivalent when nothing is selected.
-- [ ] Enable `Ctrl+V` to paste from the Windows clipboard into the PTY.
+- [x] Enable `Ctrl+C` to copy selected text when text is selected, and send `SIGINT`-equivalent when nothing is selected.
+- [x] Enable `Ctrl+V` to paste from the Windows clipboard into the PTY.
 - [ ] Add `Ctrl+Shift+C` / `Ctrl+Shift+V` as alternative copy/paste shortcuts.
 
 ### 1.5 PyInstaller Packaging
 
-- [ ] Create `build.spec` or `build.bat` for PyInstaller:
-  ```bash
-  pyinstaller --onefile --windowed --name OmniTerm Main.py
-  ```
-- [ ] Embed `settings.toml` alongside the executable (or bundle into the `.spec` as data).
-- [ ] Test the packaged `.exe` on a clean Windows machine with no Python installed.
-- [ ] Add version number to the window title (e.g., `OmniTerm v0.2`).
+- [x] Create `OmniTerm.spec` and `build.bat` for PyInstaller.
+- [x] Embed `settings.toml` alongside the executable (bundled into the `.spec` as data).
+- [x] Test the packaged `.exe` on a clean Windows machine with no Python installed.
+- [x] Add version number to the window title (e.g., `OmniTerm v1.0.0`).
 
 ---
 
@@ -81,7 +78,7 @@ A Windows-focused development plan for building OmniTerm into a full-featured te
 
 ### 3.1 SGR Parser
 
-- [x] Build a lightweight ANSI CSI/SGR parser (or integrate `pyte` as a dependency).
+- [x] Build a lightweight ANSI CSI/SGR parser.
 - [x] Parse `\x1b[...m` sequences into attributes: bold, italic, underline, strikethrough, inverse.
 - [x] Map the 8 basic ANSI colors + bright variants to the theme's color palette.
 - [x] Map 256-color and true-color (`\x1b[38;2;r;g;b m`) sequences.
@@ -124,7 +121,7 @@ A Windows-focused development plan for building OmniTerm into a full-featured te
 ### 4.3 Selection & Scrolling
 
 - [x] Implement proper text selection with Shift+Click and Shift+Arrow keys.
-- [ ] Implement scroll buffer (store last N lines in a separate buffer, render visible portion).
+- [x] Implement scroll buffer (ring-buffer stores last 10,000 lines of styled output).
 - [ ] Add a scrollbar widget.
 
 ---
@@ -143,7 +140,7 @@ A Windows-focused development plan for building OmniTerm into a full-featured te
 
 ### 5.2 Split Panes
 
-- [x] `Ctrl+Shift+D` to split horizontally, `Ctrl+Shift+\\` to split vertically.
+- [x] `Ctrl+Shift+D` to split horizontally, `Ctrl+Shift+\` to split vertically.
 - [x] Each pane is an independent `TerminalWidget` + `TerminalEngine`.
 - [ ] `Alt+Arrow` to move focus between panes.
 - [ ] Drag-and-drop to reorder panes.
@@ -161,14 +158,14 @@ A Windows-focused development plan for building OmniTerm into a full-featured te
 
 ### 6.1 Profiles
 
-- [x] Define named profiles in `settings.toml`:
+- [x] Define named profiles in `settings.toml` (cmd, powershell, pwsh, wsl, git_bash).
 - [x] `Ctrl+Shift+N` to open a new tab with a profile picker.
 - [x] Set a default profile in config.
 
 ### 6.2 Keybindings
 
-- [x] Define custom keybindings in `settings.toml`:
-- [x] Built-in actions: `find`, `new_tab`, `close_tab`, `split_horizontal`, `split_vertical`, `font_bigger`, `font_smaller`, `theme_cycle`.
+- [x] Define custom keybindings in `settings.toml`.
+- [x] Built-in actions: `find`, `new_tab`, `close_tab`, `split_horizontal`, `split_vertical`, `font_bigger`, `font_smaller`, `theme_cycle`, `theme_picker`, `toggle_opacity`, `copy`, `paste`, `profile_picker`, `ssh_connect`, `serial_connect`, `wsl_connect`.
 
 ### 6.3 Find / Search
 
@@ -184,7 +181,7 @@ A Windows-focused development plan for building OmniTerm into a full-featured te
 
 ### 7.1 PyInstaller Finalization
 
-- [x] Create a proper `.spec` file with version info, icon, and metadata.
+- [x] Create a proper `.spec` file with data bundling and metadata.
 - [x] Embed `settings.toml` as default config in the package.
 - [x] Add command-line arguments: `--version`, `--config`, `--plain`, `--shell <cmd>`.
 - [x] Test the `.exe` on Windows 10 and Windows 11.
@@ -202,6 +199,16 @@ A Windows-focused development plan for building OmniTerm into a full-featured te
 
 ---
 
+## Phase 8 — SSH Sessions (v0.9) ✅
+
+### 8.1 SSH Client
+
+- [x] `Ctrl+Shift+S` opens an SSH connection dialog.
+- [x] Support password and key-based authentication.
+- [x] Each SSH session opens in its own tab.
+
+---
+
 ## Phase 9 — Serial + WSL (v1.0) ✅
 
 ### 9.1 Serial Console
@@ -215,11 +222,20 @@ A Windows-focused development plan for building OmniTerm into a full-featured te
 - [x] Auto-detect installed WSL distributions.
 - [x] `Ctrl+Shift+U` opens a distribution picker dialog.
 - [x] Each WSL distribution opens in its own tab.
+
+---
+
+## Future Ideas
+
+| Feature | Description |
+|---------|-------------|
 | **Session Recording** | Record terminal sessions to `.cast` files (asciinema-compatible) |
 | **Plugin API** | Python plugin system for custom extensions |
 | **GPU Acceleration** | Migrate rendering to a QOpenGLWidget for massive output |
 | **Split Pane Profiles** | Different shell/theme per pane in a split layout |
 | **Quake Mode** | `Ctrl+~` dropdown terminal (like console/tilda on Linux) |
+| **Font Picker** | Enumerate installed monospace fonts and let user pick |
+| **F3 Search Navigation** | `F3` / `Shift+F3` for next/previous match in search bar |
 
 ---
 
@@ -236,4 +252,3 @@ A Windows-focused development plan for building OmniTerm into a full-featured te
 | `v0.8` | Distribution | ✅ Done |
 | `v0.9` | SSH Sessions | ✅ Done |
 | `v1.0` | Serial + WSL | ✅ Done |
-| `v1.0` | Production Ready | 🔜 Next |

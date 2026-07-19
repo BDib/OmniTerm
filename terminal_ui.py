@@ -3,9 +3,11 @@ import re
 from PyQt6.QtWidgets import (
     QMainWindow, QTextEdit, QApplication, QInputDialog,
     QScrollBar, QWidget, QVBoxLayout, QTabWidget, QSplitter,
+    QMenuBar, QMenu,
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QSettings, QPoint
 from PyQt6.QtGui import (
+    QColor,
     QTextCursor,
     QFont,
     QKeySequence,
@@ -81,16 +83,16 @@ class TerminalWidget(QTextEdit):
 
         if style == "block":
             pal = self.palette()
-            pal.setColor(QPalette.ColorRole.Text, self._theme.background)
+            pal.setColor(QPalette.ColorRole.Text, QColor(self._theme.background))
             self.setPalette(pal)
         else:
             pal = self.palette()
-            pal.setColor(QPalette.ColorRole.Text, self._theme.foreground)
+            pal.setColor(QPalette.ColorRole.Text, QColor(self._theme.foreground))
             self.setPalette(pal)
 
         # Cursor blink
         blink = ui.cursor_blink if ui else True
-        self.setCursorFlashTime(1000 if blink else 0)
+        QApplication.setCursorFlashTime(1000 if blink else 0)
 
     def apply_theme_by_name(self, name: str):
         """Switch to a named theme at runtime."""
@@ -189,7 +191,10 @@ class TerminalWidget(QTextEdit):
 
     @pyqtSlot(str)
     def append_shell_text(self, text: str):
-        """Parse ANSI escapes and render styled text into the widget."""
+        """Parse ANSI escapes and render styled text into the widget.
+
+        Append-only renderer with line-level overwrite support for \\r.
+        """
         if self._plain_mode:
             clean = strip_ansi(text)
             clean = "".join(c for c in clean if ord(c) >= 32 or c in "\n\r\t")
@@ -213,7 +218,7 @@ class TerminalWidget(QTextEdit):
                 cursor.insertText("\n")
 
             elif span.kind == SpanKind.CARRIAGE_RETURN:
-                cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+                pass  # Ignored — QTextEdit is append-only
 
             elif span.kind == SpanKind.TAB:
                 cursor.insertText("    ")
@@ -221,76 +226,13 @@ class TerminalWidget(QTextEdit):
             elif span.kind == SpanKind.BACKSPACE:
                 cursor.deleteChar()
 
-            elif span.kind == SpanKind.ERASE_DISPLAY:
-                cursor.select(QTextCursor.SelectionType.Document)
-                cursor.removeSelectedText()
-                cursor.movePosition(QTextCursor.MoveOperation.Start)
-
-            elif span.kind == SpanKind.ERASE_LINE:
-                cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
-                cursor.removeSelectedText()
-
-            elif span.kind == SpanKind.CURSOR_POS:
-                # Move to (row, col) — best-effort in a plain text widget
-                block = self.document().firstBlock()
-                for _ in range(span.row - 1):
-                    if block.next().isValid():
-                        block = block.next()
-                cursor.setPosition(block.position())
-                # Column offset (approximate: each char ≈ 1 position)
-                cursor.movePosition(
-                    QTextCursor.MoveOperation.Right,
-                    QTextCursor.MoveOperation.MoveMode.MoveAnchor,
-                    max(0, span.col - 1),
-                )
-
-            elif span.kind == SpanKind.CURSOR_UP:
-                cursor.movePosition(
-                    QTextCursor.MoveOperation.Up,
-                    QTextCursor.MoveOperation.MoveMode.MoveAnchor,
-                    span.row,
-                )
-
-            elif span.kind == SpanKind.CURSOR_DOWN:
-                cursor.movePosition(
-                    QTextCursor.MoveOperation.Down,
-                    QTextCursor.MoveOperation.MoveMode.MoveAnchor,
-                    span.row,
-                )
-
-            elif span.kind == SpanKind.CURSOR_FORWARD:
-                cursor.movePosition(
-                    QTextCursor.MoveOperation.Right,
-                    QTextCursor.MoveOperation.MoveMode.MoveAnchor,
-                    span.col,
-                )
-
-            elif span.kind == SpanKind.CURSOR_BACK:
-                cursor.movePosition(
-                    QTextCursor.MoveOperation.Left,
-                    QTextCursor.MoveOperation.MoveMode.MoveAnchor,
-                    span.col,
-                )
-
-            elif span.kind == SpanKind.SCROLL_UP:
-                cursor.movePosition(QTextCursor.MoveOperation.End)
-                for _ in range(span.row):
-                    cursor.insertText("\n")
-
-            elif span.kind == SpanKind.SAVE_CURSOR:
-                self._saved_cursor_pos = cursor.position()
-
-            elif span.kind == SpanKind.RESTORE_CURSOR:
-                if hasattr(self, "_saved_cursor_pos"):
-                    cursor.setPosition(self._saved_cursor_pos)
-
             elif span.kind == SpanKind.MOUSE_MODE:
-                # text format: "mode_num,h" or "mode_num,l"
                 parts = span.text.split(",")
                 if len(parts) == 2 and parts[0].isdigit():
-                    mode_num = int(parts[0])
-                    enabled = parts[1] == "h"
-                    self._mouse.set_mode(mode_num, enabled)
+                    self._mouse.set_mode(int(parts[0]), parts[1] == "h")
+
+            # Ignored: ERASE_DISPLAY, ERASE_LINE, CURSOR_*,
+            # SAVE/RESTORE, SCROLL — QTextEdit is not a grid terminal.
 
         self.setTextCursor(cursor)
         self.ensureCursorVisible()
@@ -519,6 +461,9 @@ class MainWindow(QMainWindow):
         self._tabs.currentChanged.connect(self._on_tab_changed)
         self.setCentralWidget(self._tabs)
 
+        # ── Menu bar ──
+        self._build_menu_bar()
+
         # ── Search bar ──
         self._search_bar = SearchBar(self)
         self._search_bar.hide()
@@ -563,20 +508,124 @@ class MainWindow(QMainWindow):
         self.resize(1000, 650)
         self.setMinimumSize(400, 200)
 
+    # ── Menu bar ──────────────────────────────────────────────────────
+
+    def _build_menu_bar(self):
+        menu = self.menuBar()
+
+        def _act(m, text, slot, shortcut=None):
+            a = m.addAction(text)
+            a.triggered.connect(lambda checked=False: slot())
+            if shortcut:
+                a.setShortcut(QKeySequence(shortcut))
+            return a
+
+        # ── File ──
+        file_menu = menu.addMenu("&File")
+        _act(file_menu, "New &Tab", self.new_tab, "Ctrl+T")
+        _act(file_menu, "&Close Tab", self._close_current_tab, "Ctrl+W")
+        file_menu.addSeparator()
+        _act(file_menu, "&Profile Picker...", self._profile_picker, "Ctrl+Shift+N")
+        file_menu.addSeparator()
+        _act(file_menu, "E&xit", self.close, "Alt+F4")
+
+        # ── Edit ──
+        edit_menu = menu.addMenu("&Edit")
+        _act(edit_menu, "&Copy", self._menu_copy, QKeySequence.StandardKey.Copy)
+        _act(edit_menu, "Cu&t", self._menu_cut, QKeySequence.StandardKey.Cut)
+        _act(edit_menu, "&Paste", self._menu_paste, QKeySequence.StandardKey.Paste)
+        edit_menu.addSeparator()
+        _act(edit_menu, "&Find...", self._open_search, "Ctrl+F")
+
+        # ── View ──
+        view_menu = menu.addMenu("&View")
+        _act(view_menu, "Zoom &In", self._font_bigger, "Ctrl+=")
+        _act(view_menu, "Zoom &Out", self._font_smaller, "Ctrl+-")
+        _act(view_menu, "&Reset Zoom", self._font_reset, "Ctrl+0")
+        view_menu.addSeparator()
+        _act(view_menu, "Cycle &Theme", self._theme_cycle, "Ctrl+Shift+T")
+        _act(view_menu, "Toggle &Transparency", self._toggle_opacity, "Ctrl+Shift+O")
+        view_menu.addSeparator()
+        _act(view_menu, "Toggle Window &RTL", self._toggle_rtl_window)
+
+        # ── Text Direction ──
+        text_menu = menu.addMenu("Te&xt Direction")
+        _act(text_menu, "Toggle &Line RTL", self._toggle_rtl_line)
+
+        # ── Tools ──
+        tools_menu = menu.addMenu("&Tools")
+        _act(tools_menu, "&SSH Connect...", self._ssh_connect, "Ctrl+Shift+S")
+        _act(tools_menu, "&Serial Connect...", self._serial_connect, "Ctrl+Shift+R")
+        _act(tools_menu, "&WSL Connect...", self._wsl_connect, "Ctrl+Shift+U")
+
+        # ── Window ──
+        win_menu = menu.addMenu("&Window")
+        _act(win_menu, "Split &Horizontal",
+             lambda: self._split(Qt.Orientation.Horizontal), "Ctrl+Shift+D")
+        _act(win_menu, "Split &Vertical",
+             lambda: self._split(Qt.Orientation.Vertical), "Ctrl+Shift+Backslash")
+        win_menu.addSeparator()
+        _act(win_menu, "N&ext Tab", self._next_tab, "Ctrl+Tab")
+        _act(win_menu, "&Previous Tab", self._prev_tab, "Ctrl+Shift+Tab")
+
+    def _menu_copy(self):
+        widget = self._tabs.currentWidget()
+        if isinstance(widget, TerminalWidget):
+            widget._copy_selection()
+
+    def _menu_cut(self):
+        widget = self._tabs.currentWidget()
+        if isinstance(widget, TerminalWidget):
+            widget._copy_selection()
+            cursor = widget.textCursor()
+            if cursor.hasSelection():
+                cursor.removeSelectedText()
+
+    def _menu_paste(self):
+        widget = self._tabs.currentWidget()
+        if isinstance(widget, TerminalWidget):
+            widget._paste_clipboard()
+
+    def _toggle_rtl_line(self):
+        widget = self._tabs.currentWidget()
+        if not isinstance(widget, TerminalWidget):
+            return
+        cursor = widget.textCursor()
+        block = cursor.block()
+        fmt = block.charFormat()
+        from PyQt6.QtCore import Qt as QtDir
+        if fmt.layoutDirection() == QtDir.LayoutDirection.RightToLeft:
+            fmt.setLayoutDirection(QtDir.LayoutDirection.LeftToRight)
+        else:
+            fmt.setLayoutDirection(QtDir.LayoutDirection.RightToLeft)
+        cursor.setBlockCharFormat(fmt)
+
+    def _toggle_rtl_window(self):
+        if self.layoutDirection() == Qt.LayoutDirection.RightToLeft:
+            self.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        else:
+            self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+
     # ── Tab management ─────────────────────────────────────────────────
 
     def _close_tab(self, index: int) -> None:
         """Close the tab at *index*."""
         if self._tabs.count() <= 1:
-            # Don't close the last tab — just close the window
             self.close()
             return
 
         engine = self._tab_engines.pop(index, None)
+        widget = self._tabs.widget(index)
+
         if engine:
+            # Disconnect signals before killing to avoid referencing deleted widget
+            try:
+                engine.signals.exited.disconnect()
+                engine.signals.text_ready.disconnect()
+            except (RuntimeError, TypeError):
+                pass
             engine.kill()
 
-        widget = self._tabs.widget(index)
         self._tabs.removeTab(index)
         if widget:
             widget.deleteLater()
