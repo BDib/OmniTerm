@@ -3,6 +3,13 @@ import os
 import faulthandler
 import traceback
 import argparse
+from pathlib import Path
+
+# Add src/ to path so sibling modules are importable
+_SRC_DIR = str(Path(__file__).resolve().parent)
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+
 from PyQt6.QtWidgets import QApplication
 from config import Config, VERSION
 from terminal_ui import MainWindow

@@ -5,7 +5,7 @@ Unit tests for the mouse handler and scroll buffer.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from mouse_handler import MouseHandler, MouseMode
 from scroll_buffer import ScrollBuffer, TextSpan

@@ -5,7 +5,7 @@ Unit tests for CLI argument parsing and distribution features.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from config import VERSION
 
@@ -22,7 +22,7 @@ def test_cli_args_help():
     """--help should not crash."""
     import subprocess
     result = subprocess.run(
-        [sys.executable, "Main.py", "--help"],
+        [sys.executable, "src/Main.py", "--help"],
         capture_output=True, text=True,
         cwd=str(Path(__file__).resolve().parent.parent),
     )
@@ -39,7 +39,7 @@ def test_cli_args_version():
     """--version should print the version."""
     import subprocess
     result = subprocess.run(
-        [sys.executable, "Main.py", "--version"],
+        [sys.executable, "src/Main.py", "--version"],
         capture_output=True, text=True,
         cwd=str(Path(__file__).resolve().parent.parent),
     )
@@ -53,7 +53,7 @@ def test_cli_shell_arg():
     import subprocess
     # Just test that the arg is accepted (not that it runs)
     result = subprocess.run(
-        [sys.executable, "Main.py", "--shell", "cmd.exe", "--help"],
+        [sys.executable, "src/Main.py", "--shell", "cmd.exe", "--help"],
         capture_output=True, text=True,
         cwd=str(Path(__file__).resolve().parent.parent),
     )
@@ -65,7 +65,7 @@ def test_cli_profile_arg():
     """--profile argument should be accepted."""
     import subprocess
     result = subprocess.run(
-        [sys.executable, "Main.py", "--profile", "powershell", "--help"],
+        [sys.executable, "src/Main.py", "--profile", "powershell", "--help"],
         capture_output=True, text=True,
         cwd=str(Path(__file__).resolve().parent.parent),
     )
@@ -77,7 +77,7 @@ def test_cli_plain_arg():
     """--plain argument should be accepted."""
     import subprocess
     result = subprocess.run(
-        [sys.executable, "Main.py", "--plain", "--help"],
+        [sys.executable, "src/Main.py", "--plain", "--help"],
         capture_output=True, text=True,
         cwd=str(Path(__file__).resolve().parent.parent),
     )
@@ -89,7 +89,7 @@ def test_cli_config_arg():
     """--config argument should be accepted."""
     import subprocess
     result = subprocess.run(
-        [sys.executable, "Main.py", "--config", "settings.toml", "--help"],
+        [sys.executable, "src/Main.py", "--config", "settings.toml", "--help"],
         capture_output=True, text=True,
         cwd=str(Path(__file__).resolve().parent.parent),
     )

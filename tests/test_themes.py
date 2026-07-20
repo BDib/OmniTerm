@@ -5,7 +5,7 @@ Unit tests for OmniTerm themes.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from themes import get_theme, list_themes, CAMPBELL, SOLARIZED_DARK, ONE_HALF_DARK, Theme
 

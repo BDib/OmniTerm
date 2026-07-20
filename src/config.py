@@ -35,7 +35,7 @@ def _default_config_path() -> Path:
     if getattr(sys, "frozen", False):
         base = Path(sys._MEIPASS)
     else:
-        base = Path(__file__).resolve().parent
+        base = Path(__file__).resolve().parent.parent  # src/ → project root
 
     candidate = base / "settings.toml"
     if candidate.is_file():

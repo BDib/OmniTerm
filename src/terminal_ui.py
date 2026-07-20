@@ -1,9 +1,9 @@
 import re
 
 from PyQt6.QtWidgets import (
-    QMainWindow, QTextEdit, QApplication, QInputDialog,
+    QMainWindow, QTextEdit, QLineEdit, QApplication, QInputDialog,
     QScrollBar, QWidget, QVBoxLayout, QTabWidget, QSplitter,
-    QMenuBar, QMenu,
+    QMenuBar, QMenu, QFrame,
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QSettings, QPoint
 from PyQt6.QtGui import (
@@ -40,32 +40,115 @@ _CURSOR_WIDTHS = {
 
 # ─── Terminal Widget ───────────────────────────────────────────────────────
 
-class TerminalWidget(QTextEdit):
-    """QTextEdit subclass that forwards keyboard input to a PTY and renders
-    plain-text output from the PTY read thread."""
+class TerminalWidget(QWidget):
+    """Terminal widget: read-only QTextEdit for output + QLineEdit for input.
+
+    This avoids all QTextEdit key-handling issues by letting the shell handle
+    everything.  The QLineEdit provides a native, visible cursor and editing.
+    """
 
     def __init__(self, parent=None, cfg=None, plain_mode=False):
         super().__init__(parent)
         self.parent_engine = None
         self._cfg = cfg
         self._plain_mode = plain_mode
-        self._saved_cursor_pos = 0
         self._mouse = MouseHandler()
         self._mouse_last_pos = QPoint()
+        self._opaque = True
 
-        self.setAcceptRichText(False)
-        self.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
-        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.setCursorWidth(_CURSOR_WIDTHS.get(cfg.ui.cursor_style if cfg else "bar", 2))
-        self.setReadOnly(False)
-        self.setMouseTracking(True)  # Enable mouse move events
+        # ── Command history ──
+        self._history: list[str] = []
+        self._hist_idx = -1          # -1 = not browsing
+        self._hist_saved = ""        # saved input while browsing
 
-        # Load theme and apply
+        # ── Layout ──
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Output (read-only QTextEdit)
+        self._output = QTextEdit()
+        self._output.setReadOnly(True)
+        self._output.setAcceptRichText(False)
+        self._output.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
+        self._output.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        layout.addWidget(self._output, 1)
+
+        # Separator line
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("color: #444; max-height: 1px;")
+        layout.addWidget(sep)
+
+        # Input (QLineEdit — provides native cursor + editing)
+        self._input = QLineEdit()
+        self._input.setPlaceholderText("")
+        self._input.returnPressed.connect(self._on_enter)
+        # Intercept Up/Down arrows for history
+        self._input.installEventFilter(self)
+        layout.addWidget(self._input)
+
+        # ── Theme ──
         self._theme = get_theme(cfg.ui.theme if cfg else "campbell")
         self._apply_theme()
 
         # ── Shortcuts ──
         self._setup_shortcuts()
+
+        # Focus the input
+        self._input.setFocus()
+
+    # ── Send command ──────────────────────────────────────────────────
+
+    def eventFilter(self, obj, event):
+        """Intercept Up/Down arrows in the input field for history."""
+        from PyQt6.QtCore import QEvent
+        if obj is self._input and event.type() == QEvent.Type.KeyPress:
+            key = event.key()
+            if key == Qt.Key.Key_Up:
+                self._history_up()
+                return True
+            if key == Qt.Key.Key_Down:
+                self._history_down()
+                return True
+        return super().eventFilter(obj, event)
+
+    def _history_up(self):
+        """Load the previous command from history."""
+        if not self._history:
+            return
+        if self._hist_idx == -1:
+            self._hist_saved = self._input.text()
+            self._hist_idx = len(self._history) - 1
+        elif self._hist_idx > 0:
+            self._hist_idx -= 1
+        self._input.setText(self._history[self._hist_idx])
+        self._input.setCursorPosition(len(self._input.text()))
+
+    def _history_down(self):
+        """Load the next command from history."""
+        if self._hist_idx < 0:
+            return
+        if self._hist_idx < len(self._history) - 1:
+            self._hist_idx += 1
+            self._input.setText(self._history[self._hist_idx])
+        else:
+            self._hist_idx = -1
+            self._input.setText(self._hist_saved)
+        self._input.setCursorPosition(len(self._input.text()))
+
+    def _on_enter(self):
+        """Send the current input line to the shell."""
+        cmd = self._input.text()
+        self._input.clear()
+        self._hist_idx = -1
+        self._hist_saved = ""
+        if cmd.strip():
+            self._history.append(cmd)
+        if not self.parent_engine or not self.parent_engine.is_ready:
+            return
+        # Send to shell
+        self.parent_engine.write(cmd + "\r")
 
     # ── Theme & Style ──────────────────────────────────────────────────
 
@@ -74,45 +157,47 @@ class TerminalWidget(QTextEdit):
         ff = ui.font_family if ui else "Cascadia Code"
         fs = ui.font_size if ui else 14
 
-        self.setStyleSheet(self._theme.stylesheet(ff, fs))
+        bg = self._theme.background
+        fg = self._theme.foreground
+        sel_bg = self._theme.selection_bg
+        sel_fg = self._theme.selection_fg
 
-        # Cursor style
-        style = (ui.cursor_style if ui else "bar")
-        width = _CURSOR_WIDTHS.get(style, 2)
-        self.setCursorWidth(width)
+        self._output.setStyleSheet(
+            f"QTextEdit {{ background-color: {bg}; color: {fg}; "
+            f"font-family: '{ff}', 'Consolas', monospace; font-size: {fs}px; "
+            f"padding: 10px; border: none; "
+            f"selection-background-color: {sel_bg}; selection-color: {sel_fg}; }}"
+        )
+        self._input.setStyleSheet(
+            f"QLineEdit {{ background-color: {bg}; color: {fg}; "
+            f"font-family: '{ff}', 'Consolas', monospace; font-size: {fs}px; "
+            f"padding: 8px 10px; border: none; "
+            f"selection-background-color: {sel_bg}; selection-color: {sel_fg}; }}"
+        )
 
-        if style == "block":
-            pal = self.palette()
-            pal.setColor(QPalette.ColorRole.Text, QColor(self._theme.background))
-            self.setPalette(pal)
-        else:
-            pal = self.palette()
-            pal.setColor(QPalette.ColorRole.Text, QColor(self._theme.foreground))
-            self.setPalette(pal)
+        # Cursor style for output
+        style = ui.cursor_style if ui else "bar"
+        self._output.setCursorWidth(_CURSOR_WIDTHS.get(style, 2))
 
         # Cursor blink
         blink = ui.cursor_blink if ui else True
         QApplication.setCursorFlashTime(1000 if blink else 0)
 
     def apply_theme_by_name(self, name: str):
-        """Switch to a named theme at runtime."""
         self._theme = get_theme(name)
         if self._cfg:
             self._cfg.ui.theme = name
         self._apply_theme()
 
     def cycle_theme(self):
-        """Advance to the next built-in theme."""
         names = list_themes()
         try:
             idx = names.index(self._cfg.ui.theme if self._cfg else "campbell")
         except ValueError:
             idx = -1
-        next_idx = (idx + 1) % len(names)
-        self.apply_theme_by_name(names[next_idx])
+        self.apply_theme_by_name(names[(idx + 1) % len(names)])
 
     def apply_font_size(self, size: int):
-        """Change the font size at runtime."""
         size = max(6, min(72, size))
         if self._cfg:
             self._cfg.ui.font_size = size
@@ -128,7 +213,6 @@ class TerminalWidget(QTextEdit):
         self.apply_font_size(14)
 
     def set_cursor_style(self, style: str):
-        """Switch cursor style at runtime."""
         if self._cfg:
             self._cfg.ui.cursor_style = style
         self._apply_theme()
@@ -136,46 +220,10 @@ class TerminalWidget(QTextEdit):
     # ── Shortcuts ──────────────────────────────────────────────────────
 
     def _setup_shortcuts(self):
-        # Font size
-        QShortcut(QKeySequence("Ctrl+="), self).activated.connect(self.increase_font_size)
-        QShortcut(QKeySequence("Ctrl+-"), self).activated.connect(self.decrease_font_size)
-        QShortcut(QKeySequence("Ctrl+0"), self).activated.connect(self.reset_font_size)
+        QShortcut(QKeySequence("Ctrl+Shift+O"), self).activated.connect(
+            self._toggle_opacity)
 
-        # Theme cycle
-        QShortcut(QKeySequence("Ctrl+Shift+T"), self).activated.connect(self.cycle_theme)
-
-        # Theme picker dialog
-        QShortcut(QKeySequence("Ctrl+,"), self).activated.connect(self._pick_theme)
-
-        # Opacity toggle
-        self._opaque = True
-        QShortcut(QKeySequence("Ctrl+Shift+O"), self).activated.connect(self._toggle_opacity)
-
-        # Copy / Paste
-        QShortcut(QKeySequence.StandardKey.Copy, self).activated.connect(
-            self._copy_selection
-        )
-        QShortcut(QKeySequence.StandardKey.Paste, self).activated.connect(
-            self._paste_clipboard
-        )
-
-    # ── Dialogs ────────────────────────────────────────────────────────
-
-    def _pick_theme(self):
-        """Show a theme-picker dialog."""
-        names = list_themes()
-        current = self._cfg.ui.theme if self._cfg else "campbell"
-        try:
-            idx = names.index(current)
-        except ValueError:
-            idx = 0
-        name, ok = QInputDialog.getItem(
-            self, "Select Theme", "Theme:", names, idx, False
-        )
-        if ok and name:
-            self.apply_theme_by_name(name)
-
-    # ── Opacity toggle ─────────────────────────────────────────────────
+    # ── Opacity ────────────────────────────────────────────────────────
 
     def _toggle_opacity(self):
         window = self.window()
@@ -187,26 +235,38 @@ class TerminalWidget(QTextEdit):
             window.setWindowOpacity(1.0)
             self._opaque = True
 
-    # ── PTY output → screen ────────────────────────────────────────────
+    # ── Dialogs ────────────────────────────────────────────────────────
+
+    def _pick_theme(self):
+        names = list_themes()
+        current = self._cfg.ui.theme if self._cfg else "campbell"
+        try:
+            idx = names.index(current)
+        except ValueError:
+            idx = 0
+        name, ok = QInputDialog.getItem(
+            self, "Select Theme", "Theme:", names, idx, False)
+        if ok and name:
+            self.apply_theme_by_name(name)
+
+    # ── Shell output → screen ──────────────────────────────────────────
 
     @pyqtSlot(str)
     def append_shell_text(self, text: str):
-        """Parse ANSI escapes and render styled text into the widget.
-
-        Append-only renderer with line-level overwrite support for \\r.
-        """
+        """Parse ANSI escapes and render styled text into the output area."""
         if self._plain_mode:
             clean = strip_ansi(text)
             clean = "".join(c for c in clean if ord(c) >= 32 or c in "\n\r\t")
             if not clean:
                 return
-            self.moveCursor(QTextCursor.MoveOperation.End)
-            self.insertPlainText(clean)
-            self.ensureCursorVisible()
+            out = self._output
+            out.moveCursor(QTextCursor.MoveOperation.End)
+            out.insertPlainText(clean)
+            out.ensureCursorVisible()
             return
 
         spans = parse_ansi(text)
-        cursor = self.textCursor()
+        cursor = self._output.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
 
         for span in spans:
@@ -218,7 +278,7 @@ class TerminalWidget(QTextEdit):
                 cursor.insertText("\n")
 
             elif span.kind == SpanKind.CARRIAGE_RETURN:
-                pass  # Ignored — QTextEdit is append-only
+                pass  # Ignore — \n handles line breaks; CR causes rendering bugs
 
             elif span.kind == SpanKind.TAB:
                 cursor.insertText("    ")
@@ -231,204 +291,126 @@ class TerminalWidget(QTextEdit):
                 if len(parts) == 2 and parts[0].isdigit():
                     self._mouse.set_mode(int(parts[0]), parts[1] == "h")
 
-            # Ignored: ERASE_DISPLAY, ERASE_LINE, CURSOR_*,
-            # SAVE/RESTORE, SCROLL — QTextEdit is not a grid terminal.
+            elif span.kind == SpanKind.ERASE_DISPLAY:
+                self._output.clear()
+                cursor = self._output.textCursor()
+                cursor.movePosition(QTextCursor.MoveOperation.Start)
 
-        self.setTextCursor(cursor)
-        self.ensureCursorVisible()
+            elif span.kind == SpanKind.ERASE_LINE:
+                cursor.movePosition(
+                    QTextCursor.MoveOperation.EndOfBlock,
+                    QTextCursor.MoveMode.KeepAnchor)
+                cursor.removeSelectedText()
+
+        self._output.setTextCursor(cursor)
+        self._output.ensureCursorVisible()
 
     @pyqtSlot(str)
     def show_exit_message(self, text: str):
-        """Called by the engine when the PTY process exits."""
-        self.moveCursor(QTextCursor.MoveOperation.End)
-        self.insertPlainText(f"\n{text}\n")
-        self.ensureCursorVisible()
+        cursor = self._output.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.insertText(f"\n{text}\n")
+        self._output.setTextCursor(cursor)
+        self._output.ensureCursorVisible()
 
-    # ── Keyboard → PTY ─────────────────────────────────────────────────
+    # ── Focus proxy ────────────────────────────────────────────────────
 
-    def keyPressEvent(self, event):
-        if not self.parent_engine or not self.parent_engine.is_ready:
-            return
-
-        key = event.key()
-        text = event.text()
-        mods = event.modifiers()
-
-        # ── Enter / Return ──
-        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-            self.parent_engine.write("\r")
-            return
-
-        # ── Backspace ──
-        if key == Qt.Key.Key_Backspace:
-            self.parent_engine.write("\b")
-            return
-
-        # ── Tab ──
-        if key == Qt.Key.Key_Tab:
-            self.parent_engine.write("\t")
-            return
-
-        # ── Delete ──
-        if key == Qt.Key.Key_Delete:
-            self.parent_engine.write("\x1b[3~")
-            return
-
-        # ── Arrow keys ──
-        arrow_map = {
-            Qt.Key.Key_Up: "A",
-            Qt.Key.Key_Down: "B",
-            Qt.Key.Key_Right: "C",
-            Qt.Key.Key_Left: "D",
-        }
-        if key in arrow_map:
-            if mods & Qt.KeyboardModifier.ControlModifier:
-                self.parent_engine.write(f"\x1b[1;5{arrow_map[key]}")
-            else:
-                self.parent_engine.write(f"\x1b[{arrow_map[key]}")
-            return
-
-        # ── Home / End ──
-        if key == Qt.Key.Key_Home:
-            self.parent_engine.write("\x1b[H")
-            return
-        if key == Qt.Key.Key_End:
-            self.parent_engine.write("\x1b[F")
-            return
-
-        # ── Page Up / Page Down ──
-        if key == Qt.Key.Key_PageUp:
-            self.parent_engine.write("\x1b[5~")
-            return
-        if key == Qt.Key.Key_PageDown:
-            self.parent_engine.write("\x1b[6~")
-            return
-
-        # ── Escape ──
-        if key == Qt.Key.Key_Escape:
-            self.parent_engine.write("\x1b")
-            return
-
-        # ── Ctrl combinations ──
-        if mods & Qt.KeyboardModifier.ControlModifier:
-            code = text.lower() if text else ""
-            ctrl_map = {
-                "c": "\x03",
-                "d": "\x04",
-                "z": "\x1a",
-                "l": "\x0c",
-                "a": "\x01",
-                "e": "\x05",
-                "k": "\x0b",
-                "u": "\x15",
-                "w": "\x17",
-            }
-            if code in ctrl_map:
-                self.parent_engine.write(ctrl_map[code])
-                return
-
-        # ── Fallback: printable characters ──
-        if text:
-            self.parent_engine.write(text)
+    def setFocus(self, reason=Qt.FocusReason.OtherFocusReason):
+        self._input.setFocus(reason)
 
     # ── Copy / Paste ───────────────────────────────────────────────────
 
     def _copy_selection(self):
-        cursor = self.textCursor()
+        cursor = self._output.textCursor()
         if cursor.hasSelection():
             QApplication.clipboard().setText(cursor.selectedText())
 
     def _paste_clipboard(self):
         cb = QApplication.clipboard()
         text = cb.text()
-        if text and self.parent_engine and self.parent_engine.is_ready:
-            self.parent_engine.write(text)
+        if text:
+            self._input.insert(text)
 
-    # ── Mouse events ───────────────────────────────────────────────────
+    # ── QTextEdit compat proxies (used by MainWindow) ─────────────────
+
+    def textCursor(self):
+        return self._output.textCursor()
+
+    def setTextCursor(self, cursor):
+        self._output.setTextCursor(cursor)
+
+    def moveCursor(self, op):
+        self._output.moveCursor(op)
+
+    def toPlainText(self):
+        return self._output.toPlainText()
+
+    def clear(self):
+        self._output.clear()
+
+    # ── Mouse events (terminal mouse protocol) ─────────────────────────
 
     def _pos_to_cell(self, pos: QPoint) -> tuple[int, int]:
-        """Convert a pixel position to (col, row) in character cells."""
-        cursor = self.cursorForPosition(pos)
-        block = cursor.blockNumber()
-        col = cursor.positionInBlock() + 1
-        row = block + 1
-        return col, row
+        cursor = self._output.cursorForPosition(pos)
+        return cursor.positionInBlock() + 1, cursor.blockNumber() + 1
 
     def mousePressEvent(self, event: QMouseEvent):
         if not self._mouse.is_active or not self.parent_engine:
             super().mousePressEvent(event)
             return
-
         col, row = self._pos_to_cell(event.position().toPoint())
-        button = 0
-        if event.button() == Qt.MouseButton.LeftButton:
-            button = 0
-        elif event.button() == Qt.MouseButton.MiddleButton:
-            button = 1
-        elif event.button() == Qt.MouseButton.RightButton:
-            button = 2
-        else:
-            super().mousePressEvent(event)
+        button_map = {
+            Qt.MouseButton.LeftButton: 0,
+            Qt.MouseButton.MiddleButton: 1,
+            Qt.MouseButton.RightButton: 2,
+        }
+        button = button_map.get(event.button())
+        if button is None:
             return
-
         shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
         ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
         alt = bool(event.modifiers() & Qt.KeyboardModifier.AltModifier)
-
         seq = self._mouse.encode_press(col, row, button, shift, ctrl, alt)
         if seq and self.parent_engine.is_ready:
             self.parent_engine.write(seq)
 
-        self._mouse_last_pos = event.position().toPoint()
-        # Still allow normal selection when not in mouse tracking
-        # (handled by super() for text selection)
-
     def mouseReleaseEvent(self, event: QMouseEvent):
         if not self._mouse.is_active or not self.parent_engine:
-            super().mouseReleaseEvent(event)
             return
-
         col, row = self._pos_to_cell(event.position().toPoint())
-        button = 0
-        if event.button() == Qt.MouseButton.LeftButton:
-            button = 0
-        elif event.button() == Qt.MouseButton.MiddleButton:
-            button = 1
-        elif event.button() == Qt.MouseButton.RightButton:
-            button = 2
-
+        button_map = {
+            Qt.MouseButton.LeftButton: 0,
+            Qt.MouseButton.MiddleButton: 1,
+            Qt.MouseButton.RightButton: 2,
+        }
+        button = button_map.get(event.button(), 0)
         seq = self._mouse.encode_release(col, row, button)
         if seq and self.parent_engine.is_ready:
             self.parent_engine.write(seq)
 
     def mouseMoveEvent(self, event: QMouseEvent):
         if not self._mouse.is_active or not self.parent_engine:
-            super().mouseMoveEvent(event)
             return
-
         col, row = self._pos_to_cell(event.position().toPoint())
         shift = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
         ctrl = bool(event.modifiers() & Qt.KeyboardModifier.ControlModifier)
         alt = bool(event.modifiers() & Qt.KeyboardModifier.AltModifier)
-
         seq = self._mouse.encode_motion(col, row, 0, shift, ctrl, alt)
         if seq and self.parent_engine.is_ready:
             self.parent_engine.write(seq)
 
     def wheelEvent(self, event: QMouseEvent):
         if not self._mouse.is_active or not self.parent_engine:
-            super().wheelEvent(event)
+            # Scroll the output widget instead
+            delta = event.angleDelta().y()
+            sb = self._output.verticalScrollBar()
+            sb.setValue(sb.value() - delta)
             return
-
         col, row = self._pos_to_cell(event.position().toPoint())
         angle = event.angleDelta().y()
-        if angle > 0:
-            button = 64  # scroll up
-        elif angle < 0:
-            button = 65  # scroll down
-        else:
+        button = 64 if angle > 0 else 65 if angle < 0 else None
+        if button is None:
             return
-
         seq = self._mouse.encode_press(col, row, button)
         if seq and self.parent_engine.is_ready:
             self.parent_engine.write(seq)
@@ -469,27 +451,12 @@ class MainWindow(QMainWindow):
         self._search_bar.hide()
 
         # ── Built-in shortcuts ──
-        QShortcut(QKeySequence("Ctrl+T"), self).activated.connect(self.new_tab)
-        QShortcut(QKeySequence("Ctrl+W"), self).activated.connect(self._close_current_tab)
+        # Note: Most shortcuts are defined in _build_menu_bar() via setShortcut().
+        # Only shortcuts NOT in the menu bar are defined here as standalone QShortcuts.
         QShortcut(QKeySequence("Ctrl+Tab"), self).activated.connect(self._next_tab)
         QShortcut(QKeySequence("Ctrl+Shift+Tab"), self).activated.connect(self._prev_tab)
-        QShortcut(QKeySequence("Ctrl+Shift+D"), self).activated.connect(
-            lambda: self._split(Qt.Orientation.Horizontal)
-        )
-        QShortcut(QKeySequence("Ctrl+Shift+Backslash"), self).activated.connect(
-            lambda: self._split(Qt.Orientation.Vertical)
-        )
-        QShortcut(QKeySequence("Ctrl+Shift+N"), self).activated.connect(self._profile_picker)
-        QShortcut(QKeySequence("Ctrl+Shift+S"), self).activated.connect(self._ssh_connect)
-        QShortcut(QKeySequence("Ctrl+Shift+R"), self).activated.connect(self._serial_connect)
         QShortcut(QKeySequence("Ctrl+Shift+U"), self).activated.connect(self._wsl_connect)
-        QShortcut(QKeySequence("Ctrl+F"), self).activated.connect(self._open_search)
-        QShortcut(QKeySequence("Ctrl+="), self).activated.connect(self._font_bigger)
-        QShortcut(QKeySequence("Ctrl+-"), self).activated.connect(self._font_smaller)
-        QShortcut(QKeySequence("Ctrl+0"), self).activated.connect(self._font_reset)
-        QShortcut(QKeySequence("Ctrl+Shift+T"), self).activated.connect(self._theme_cycle)
         QShortcut(QKeySequence("Ctrl+,"), self).activated.connect(self._theme_picker)
-        QShortcut(QKeySequence("Ctrl+Shift+O"), self).activated.connect(self._toggle_opacity)
 
         # ── Custom keybindings from config ──
         if self._cfg:
@@ -593,11 +560,10 @@ class MainWindow(QMainWindow):
         cursor = widget.textCursor()
         block = cursor.block()
         fmt = block.charFormat()
-        from PyQt6.QtCore import Qt as QtDir
-        if fmt.layoutDirection() == QtDir.LayoutDirection.RightToLeft:
-            fmt.setLayoutDirection(QtDir.LayoutDirection.LeftToRight)
+        if fmt.layoutDirection() == Qt.LayoutDirection.RightToLeft:
+            fmt.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
         else:
-            fmt.setLayoutDirection(QtDir.LayoutDirection.RightToLeft)
+            fmt.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         cursor.setBlockCharFormat(fmt)
 
     def _toggle_rtl_window(self):
@@ -652,10 +618,10 @@ class MainWindow(QMainWindow):
             widget.setFocus()
 
     def _on_tab_process_exited(self, terminal: TerminalWidget) -> None:
-        """Update tab title when the shell process exits."""
+        """Close the tab when the shell process exits."""
         idx = self._tabs.indexOf(terminal)
         if idx >= 0:
-            self._tabs.setTabText(idx, "[exited]")
+            self._close_tab(idx)
 
     @staticmethod
     def _shell_title(shell: str) -> str:

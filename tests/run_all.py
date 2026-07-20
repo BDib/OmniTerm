@@ -9,12 +9,12 @@ import sys
 from pathlib import Path
 
 # Ensure the project root is on the path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from tests import (
     test_config, test_themes, test_ansi_parser,
     test_mouse_scroll, test_tabs, test_profiles, test_distribution,
-    test_ssh, test_serial_wsl,
+    test_ssh, test_serial_wsl, test_rendering, test_keyboard,
 )
 
 
@@ -22,7 +22,7 @@ def main():
     passed = 0
     failed = 0
 
-    for module in (test_config, test_themes, test_ansi_parser, test_mouse_scroll, test_tabs, test_profiles, test_distribution, test_ssh, test_serial_wsl):
+    for module in (test_config, test_themes, test_ansi_parser, test_mouse_scroll, test_tabs, test_profiles, test_distribution, test_ssh, test_serial_wsl, test_rendering, test_keyboard):
         try:
             module.run_all()
             passed += 1

@@ -15,8 +15,8 @@ src_root = Path(SPECPATH)
 _winpty_dir = Path(_winpty_mod.__file__).parent
 
 a = Analysis(
-    [str(src_root / "Main.py")],
-    pathex=[str(src_root)],
+    [str(src_root / "src" / "Main.py")],
+    pathex=[str(src_root), str(src_root / "src")],
     binaries=[
         (str(_winpty_dir / "_winpty.cp313-win_amd64.pyd"), "winpty"),
         (str(_winpty_dir / "conpty.dll"), "winpty"),

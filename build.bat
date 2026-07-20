@@ -39,7 +39,7 @@ if %errorlevel% neq 0 (
 )
 
 :: Display version
-python -c "from config import VERSION; print(f'Building OmniTerm v{VERSION}')"
+python -c "import sys; sys.path.insert(0,'src'); from config import VERSION; print(f'Building OmniTerm v{VERSION}')"
 
 :: Check for PyInstaller (via python -m to use correct interpreter)
 python -c "import PyInstaller" >nul 2>&1

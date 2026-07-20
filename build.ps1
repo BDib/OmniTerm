@@ -21,7 +21,7 @@ Set-Location $root
 
 Write-Host ""
 Write-Host "============================================"
-Write-Host "  OmniTerm v$(python -c 'from config import VERSION; print(VERSION)')"
+Write-Host "  OmniTerm v$(python -c "import sys; sys.path.insert(0,'src'); from config import VERSION; print(VERSION)")"
 Write-Host "============================================"
 Write-Host ""
 
@@ -41,7 +41,7 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 }
 
 # Display version
-python -c "from config import VERSION; print(f'Building OmniTerm v{VERSION}')"
+python -c "import sys; sys.path.insert(0,'src'); from config import VERSION; print(f'Building OmniTerm v{VERSION}')"
 
 # Check for PyInstaller (via python -m to use correct interpreter)
 python -c "import PyInstaller" 2>$null

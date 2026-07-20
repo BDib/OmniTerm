@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 
 # Add parent dir to path so we can import modules
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from config import Config, UIConfig, UIBehavior, VERSION
 

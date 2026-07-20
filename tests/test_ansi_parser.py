@@ -5,7 +5,7 @@ Unit tests for the ANSI escape sequence parser.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from ansi_parser import (
     parse_ansi, strip_ansi, SpanKind, SGRState, Span, indexed_to_rgb,

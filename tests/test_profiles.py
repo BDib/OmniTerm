@@ -5,7 +5,7 @@ Unit tests for profiles, keybindings, search bar, and profile picker.
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from config import Config, Profile, Keybinding, BUILTIN_ACTIONS
 
