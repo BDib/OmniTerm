@@ -76,70 +76,58 @@ class TerminalEngine:
             return False
 
     def _start_elevated(self, cmd: str) -> bool:
-        """Launch *cmd* elevated via ShellExecuteW + subprocess pipe I/O."""
-        import subprocess
+        """Launch *cmd* elevated with UAC prompt via ShellExecuteW."""
+        import ctypes
+        import ctypes.wintypes
+        import shlex
+
         try:
-            self._elevated_proc = subprocess.Popen(
-                cmd, shell=True,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                bufsize=0,
-                creationflags=(
-                    subprocess.CREATE_NEW_CONSOLE
-                ),
+            # ShellExecuteW with "runas" triggers UAC
+            verb = "runas"
+            file = cmd
+            params = ""
+            # If cmd contains spaces, split into exe + args
+            parts = shlex.split(cmd)
+            if parts:
+                file = parts[0]
+                params = " ".join(shlex.quote(p) for p in parts[1:]) if len(parts) > 1 else ""
+
+            result = ctypes.windll.shell32.ShellExecuteW(
+                None, verb, file, params, None, 1  # SW_SHOWNORMAL
             )
+            # ShellExecuteW returns > 32 on success
+            if result <= 32:
+                log.error("ShellExecuteW failed with code %d", result)
+                self.alive = False
+                self.is_ready = False
+                return False
+
+            # Elevated process runs in its own console — mark as alive
+            # but we can't pipe I/O to it (separate console window)
             self.alive = True
-            self.is_ready = False
+            self.is_ready = True  # Mark ready so the tab works
+            self._elevated_mode = True
+
+            # Start a thread that just waits (keeps the tab alive)
             self._reader_thread = threading.Thread(
-                target=self._elevated_read_loop, daemon=True, name="elev-reader"
-            )
-            self._writer_thread = threading.Thread(
-                target=self._elevated_write_loop, daemon=True, name="elev-writer"
+                target=self._elevated_wait_loop, daemon=True, name="elev-wait"
             )
             self._reader_thread.start()
-            self._writer_thread.start()
             return True
+
         except Exception as exc:
             log.error("Failed to start elevated process: %s", exc)
             self.alive = False
             self.is_ready = False
             return False
 
-    def _elevated_read_loop(self) -> None:
+    def _elevated_wait_loop(self) -> None:
+        """Keep the tab alive while elevated process runs in its own console."""
         import time
-        time.sleep(0.5)
-        self.is_ready = True
-        proc = self._elevated_proc
-        while self.alive and proc and proc.poll() is None:
-            try:
-                chunk = proc.stdout.read(1024)
-                if chunk:
-                    text = chunk.decode("utf-8", errors="replace")
-                    self.signals.text_ready.emit(text)
-                else:
-                    time.sleep(0.01)
-            except Exception:
-                break
-        self.alive = False
+        while self.alive:
+            time.sleep(1)
         self.is_ready = False
-        self.signals.exited.emit("[Process exited]")
-
-    def _elevated_write_loop(self) -> None:
-        proc = self._elevated_proc
-        while self.alive and proc and proc.poll() is None:
-            try:
-                data = self.input_queue.get(timeout=0.1)
-                if data is None:
-                    break
-                if proc.stdin and self.alive:
-                    proc.stdin.write(data.encode("utf-8"))
-                    proc.stdin.flush()
-                self.input_queue.task_done()
-            except queue.Empty:
-                continue
-            except Exception:
-                break
+        self.signals.exited.emit("[Admin session — process runs in separate console]")
 
     def start_ssh(self, host: str, port: int = 22, username: str = "",
                   password: str | None = None,
