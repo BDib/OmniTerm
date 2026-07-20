@@ -10,7 +10,7 @@ from __future__ import annotations
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QPushButton, QHeaderView, QAbstractItemView, QLineEdit, QCheckBox,
-    QMessageBox, QLabel, QComboBox,
+    QMessageBox, QLabel, QComboBox, QWidget,
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
