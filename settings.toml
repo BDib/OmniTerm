@@ -28,11 +28,11 @@ command = "cmd.exe"
 
 [profiles.powershell]
 command = "powershell.exe"
-args = ["-NoLogo"]
+args = ["-NoLogo", "-NoProfile"]
 
 [profiles.pwsh]
 command = "pwsh.exe"
-args = ["-NoLogo"]
+args = ["-NoLogo", "-NoProfile"]
 
 [profiles.wsl]
 command = "wsl.exe"

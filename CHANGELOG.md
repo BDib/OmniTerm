@@ -19,6 +19,8 @@
 - **ERASE_DISPLAY** (`cls`/`clear`/`Clear-Host`): Now properly clears the output widget
 - **ERASE_LINE** (`\x1b[K`): Clears from cursor to end of line
 - **Carriage return**: Ignored for `\r\n` line endings (avoids blank lines and text duplication)
+- **CURSOR_POS handling**: Handles PSReadLine rewrites — when cursor moves backward within a line, old text is deleted before inserting new text (fixes doubled characters in PowerShell)
+- **CURSOR_BACK / CURSOR_FORWARD**: Handled for cursor movement sequences
 
 ### Key Fixes
 - **Delete key**: Now handled natively by QLineEdit (no longer inserts tab/space)
@@ -28,6 +30,7 @@
 - **`exit` command**: Closes the tab; last tab closes the application
 - **`pause` support**: All keystrokes forwarded to shell via QLineEdit → Enter flow
 - **Doubled text**: Eliminated by using QLineEdit instead of forwarding keystrokes to shell
+- **PowerShell doubled text**: Fixed by adding `-NoProfile` to disable PSReadLine, and by handling CURSOR_POS for line rewrites
 
 ### Project Structure
 - Moved all Python source files to `src/` directory

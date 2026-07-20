@@ -36,7 +36,7 @@ def test_config_loads_profiles():
     assert "cmd" in cfg.profiles
     assert "powershell" in cfg.profiles
     assert cfg.profiles["cmd"].command == "cmd.exe"
-    assert cfg.profiles["powershell"].args == ["-NoLogo"]
+    assert cfg.profiles["powershell"].args == ["-NoLogo", "-NoProfile"]
     print("  PASS: Config loads profiles")
 
 
@@ -61,7 +61,7 @@ def test_config_get_shell_command():
     cfg = Config.load()
     cmd, args = cfg.get_shell_command("powershell")
     assert cmd == "powershell.exe"
-    assert args == ["-NoLogo"]
+    assert args == ["-NoLogo", "-NoProfile"]
 
     # Fallback to cmd for unknown profile
     cmd, args = cfg.get_shell_command("nonexistent")

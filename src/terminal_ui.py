@@ -253,7 +253,11 @@ class TerminalWidget(QWidget):
 
     @pyqtSlot(str)
     def append_shell_text(self, text: str):
-        """Parse ANSI escapes and render styled text into the output area."""
+        """Parse ANSI escapes and render styled text into the output area.
+
+        Handles CURSOR_POS for PSReadLine rewrites: when the cursor moves
+        backward (within the current line), we overwrite existing text.
+        """
         if self._plain_mode:
             clean = strip_ansi(text)
             clean = "".join(c for c in clean if ord(c) >= 32 or c in "\n\r\t")
@@ -271,14 +275,30 @@ class TerminalWidget(QWidget):
 
         for span in spans:
             if span.kind == SpanKind.TEXT:
-                fmt = span_to_format(span.sgr, self._theme)
-                cursor.insertText(span.text, fmt)
+                cursor.insertText(span.text,
+                    span_to_format(span.sgr, self._theme))
 
             elif span.kind == SpanKind.NEWLINE:
                 cursor.insertText("\n")
 
             elif span.kind == SpanKind.CARRIAGE_RETURN:
-                pass  # Ignore — \n handles line breaks; CR causes rendering bugs
+                pass  # Ignored
+
+            elif span.kind == SpanKind.CURSOR_POS:
+                self._handle_cursor_pos(cursor, span.row, span.col)
+
+            elif span.kind == SpanKind.CURSOR_BACK:
+                for _ in range(max(1, span.col)):
+                    if cursor.position() > 0:
+                        cursor.movePosition(
+                            QTextCursor.MoveOperation.Left,
+                            QTextCursor.MoveMode.KeepAnchor)
+
+            elif span.kind == SpanKind.CURSOR_FORWARD:
+                for _ in range(max(1, span.col)):
+                    cursor.movePosition(
+                        QTextCursor.MoveOperation.Right,
+                        QTextCursor.MoveMode.KeepAnchor)
 
             elif span.kind == SpanKind.TAB:
                 cursor.insertText("    ")
@@ -304,6 +324,27 @@ class TerminalWidget(QWidget):
 
         self._output.setTextCursor(cursor)
         self._output.ensureCursorVisible()
+
+    def _handle_cursor_pos(self, cursor, row, col):
+        """Move cursor to (row, col) and overwrite if moving backward."""
+        doc = self._output.document()
+        target_block = doc.findBlockByLineNumber(row - 1)
+        if not target_block.isValid():
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            return
+
+        block_text = target_block.text()
+        col_offset = min(col - 1, len(block_text))
+        target_pos = target_block.position() + col_offset
+
+        current_pos = cursor.position()
+        if target_pos < current_pos:
+            # PSReadLine rewrite — delete old text from target to current
+            cursor.setPosition(target_pos, QTextCursor.MoveMode.MoveAnchor)
+            cursor.setPosition(current_pos, QTextCursor.MoveMode.KeepAnchor)
+            cursor.removeSelectedText()
+        else:
+            cursor.setPosition(target_pos)
 
     @pyqtSlot(str)
     def show_exit_message(self, text: str):
