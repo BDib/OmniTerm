@@ -78,37 +78,27 @@ class TerminalEngine:
     def _start_elevated(self, cmd: str) -> bool:
         """Launch *cmd* elevated with UAC prompt via ShellExecuteW."""
         import ctypes
-        import ctypes.wintypes
         import shlex
 
         try:
-            # ShellExecuteW with "runas" triggers UAC
-            verb = "runas"
-            file = cmd
-            params = ""
-            # If cmd contains spaces, split into exe + args
             parts = shlex.split(cmd)
-            if parts:
-                file = parts[0]
-                params = " ".join(shlex.quote(p) for p in parts[1:]) if len(parts) > 1 else ""
+            file = parts[0] if parts else cmd
+            params = " ".join(parts[1:]) if len(parts) > 1 else ""
 
             result = ctypes.windll.shell32.ShellExecuteW(
-                None, verb, file, params, None, 1  # SW_SHOWNORMAL
+                None, "runas", file, params, None, 1
             )
-            # ShellExecuteW returns > 32 on success
             if result <= 32:
                 log.error("ShellExecuteW failed with code %d", result)
                 self.alive = False
                 self.is_ready = False
                 return False
 
-            # Elevated process runs in its own console — mark as alive
-            # but we can't pipe I/O to it (separate console window)
+            # Elevated process runs in its own console
             self.alive = True
-            self.is_ready = True  # Mark ready so the tab works
+            self.is_ready = True
             self._elevated_mode = True
 
-            # Start a thread that just waits (keeps the tab alive)
             self._reader_thread = threading.Thread(
                 target=self._elevated_wait_loop, daemon=True, name="elev-wait"
             )
@@ -122,12 +112,12 @@ class TerminalEngine:
             return False
 
     def _elevated_wait_loop(self) -> None:
-        """Keep the tab alive while elevated process runs in its own console."""
+        """Keep the tab alive while elevated process runs."""
         import time
         while self.alive:
             time.sleep(1)
         self.is_ready = False
-        self.signals.exited.emit("[Admin session — process runs in separate console]")
+        self.signals.exited.emit("[Admin session ended]")
 
     def start_ssh(self, host: str, port: int = 22, username: str = "",
                   password: str | None = None,

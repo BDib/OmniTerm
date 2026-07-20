@@ -551,16 +551,52 @@ class MainWindow(QMainWindow):
         profile = self._cfg.get_profile(profile_name)
         if not profile:
             return
+
+        if profile.admin:
+            # Relaunch OmniTerm as admin with --admin flag
+            self._launch_as_admin(profile)
+            return
+
         full_cmd = profile.command
         if profile.args:
             full_cmd = f"{profile.command} {' '.join(profile.args)}"
         self.new_tab(shell=full_cmd, admin=profile.admin)
 
+    def _launch_as_admin(self, profile):
+        """Relaunch OmniTerm as admin, auto-opening the given profile."""
+        import ctypes
+        import sys
+        import os
+
+        # Get the path to the running executable or script
+        if getattr(sys, 'frozen', False):
+            exe = sys.executable
+        else:
+            exe = sys.executable  # python.exe
+
+        # Build args to pass to the elevated instance
+        args = [f"--shell", f"{profile.command} {' '.join(profile.args)}".strip()]
+
+        params = " ".join(f'"{a}"' for a in args)
+
+        # Use ShellExecuteW with "runas" — triggers UAC
+        result = ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", exe, params, None, 1
+        )
+        if result <= 32:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Admin",
+                "Failed to launch as admin. User may have cancelled UAC.")
+
     def _manage_profiles(self):
         """Open the profile manager dialog."""
-        from profile_manager import ProfileManagerDialog
-        dlg = ProfileManagerDialog(self._cfg, self)
-        dlg.exec()
+        try:
+            from profile_manager import ProfileManagerDialog
+            dlg = ProfileManagerDialog(self._cfg, self)
+            dlg.exec()
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Error", f"Failed to open Profile Manager:\n{e}")
 
     def _build_menu_bar(self):
         menu = self.menuBar()
