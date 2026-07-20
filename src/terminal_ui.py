@@ -532,14 +532,16 @@ class MainWindow(QMainWindow):
         """Show a dropdown menu with profiles for opening a new tab."""
         menu = QMenu(self)
         if self._cfg:
-            for name, profile in self._cfg.profiles.items():
-                cmd = f"{profile.command} {' '.join(profile.args)}".strip()
-                action = menu.addAction(f"{name}  ({cmd})")
+            for name, profile in sorted(self._cfg.profiles.items()):
+                label = name.replace("_", " ").title()
+                if profile.admin:
+                    label += "  [Admin]"
+                action = menu.addAction(label)
                 action.triggered.connect(
                     lambda checked=False, n=name: self._open_profile_tab(n))
         menu.addSeparator()
-        action = menu.addAction("Profile Picker...")
-        action.triggered.connect(self._profile_picker)
+        action = menu.addAction("Manage Profiles...")
+        action.triggered.connect(self._manage_profiles)
         menu.exec(self._add_btn.mapToGlobal(self._add_btn.rect().bottomLeft()))
 
     def _open_profile_tab(self, profile_name: str):
@@ -552,7 +554,13 @@ class MainWindow(QMainWindow):
         full_cmd = profile.command
         if profile.args:
             full_cmd = f"{profile.command} {' '.join(profile.args)}"
-        self.new_tab(shell=full_cmd)
+        self.new_tab(shell=full_cmd, admin=profile.admin)
+
+    def _manage_profiles(self):
+        """Open the profile manager dialog."""
+        from profile_manager import ProfileManagerDialog
+        dlg = ProfileManagerDialog(self._cfg, self)
+        dlg.exec()
 
     def _build_menu_bar(self):
         menu = self.menuBar()
@@ -570,6 +578,7 @@ class MainWindow(QMainWindow):
         _act(file_menu, "&Close Tab", self._close_current_tab, "Ctrl+W")
         file_menu.addSeparator()
         _act(file_menu, "&Profile Picker...", self._profile_picker, "Ctrl+Shift+N")
+        _act(file_menu, "&Manage Profiles...", self._manage_profiles)
         file_menu.addSeparator()
         _act(file_menu, "E&xit", self.close, "Alt+F4")
 
@@ -825,7 +834,7 @@ class MainWindow(QMainWindow):
             self.new_tab(wsl=True, distribution=name)
 
     def new_tab(self, shell: str = "cmd.exe", wsl: bool = False,
-                distribution: str | None = None) -> int:
+                distribution: str | None = None, admin: bool = False) -> int:
         """Open a new tab running *shell* or WSL. Returns the tab index."""
         from terminal_core import TerminalEngine
 
@@ -844,9 +853,14 @@ class MainWindow(QMainWindow):
             cmd = shell
             title = self._shell_title(shell)
 
+        if admin:
+            title += " [Admin]"
+
         idx = self._tabs.addTab(terminal, title)
         self._tab_engines[idx] = engine
         self._tabs.setCurrentIndex(idx)
+
+        engine.start(cmd, admin=admin)
 
         engine.start(cmd)
         terminal.setFocus()

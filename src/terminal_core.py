@@ -44,11 +44,17 @@ class TerminalEngine:
 
     # ── Lifecycle ──────────────────────────────────────────────────────
 
-    def start(self, cmd: str = "cmd.exe") -> bool:
-        """Spawn a new local PTY running *cmd*.  Returns True on success."""
+    def start(self, cmd: str = "cmd.exe", admin: bool = False) -> bool:
+        """Spawn a new local PTY running *cmd*.  Returns True on success.
+
+        If *admin* is True, launches the process elevated via ShellExecuteW.
+        """
         self._cmd = cmd
         self.ssh = None
+        self.serial = None
         try:
+            if admin:
+                return self._start_elevated(cmd)
             from winpty import PtyProcess
             self.pty = PtyProcess.spawn(cmd)
             self.alive = True
@@ -68,6 +74,72 @@ class TerminalEngine:
             self.alive = False
             self.is_ready = False
             return False
+
+    def _start_elevated(self, cmd: str) -> bool:
+        """Launch *cmd* elevated via ShellExecuteW + subprocess pipe I/O."""
+        import subprocess
+        try:
+            self._elevated_proc = subprocess.Popen(
+                cmd, shell=True,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=0,
+                creationflags=(
+                    subprocess.CREATE_NEW_CONSOLE
+                ),
+            )
+            self.alive = True
+            self.is_ready = False
+            self._reader_thread = threading.Thread(
+                target=self._elevated_read_loop, daemon=True, name="elev-reader"
+            )
+            self._writer_thread = threading.Thread(
+                target=self._elevated_write_loop, daemon=True, name="elev-writer"
+            )
+            self._reader_thread.start()
+            self._writer_thread.start()
+            return True
+        except Exception as exc:
+            log.error("Failed to start elevated process: %s", exc)
+            self.alive = False
+            self.is_ready = False
+            return False
+
+    def _elevated_read_loop(self) -> None:
+        import time
+        time.sleep(0.5)
+        self.is_ready = True
+        proc = self._elevated_proc
+        while self.alive and proc and proc.poll() is None:
+            try:
+                chunk = proc.stdout.read(1024)
+                if chunk:
+                    text = chunk.decode("utf-8", errors="replace")
+                    self.signals.text_ready.emit(text)
+                else:
+                    time.sleep(0.01)
+            except Exception:
+                break
+        self.alive = False
+        self.is_ready = False
+        self.signals.exited.emit("[Process exited]")
+
+    def _elevated_write_loop(self) -> None:
+        proc = self._elevated_proc
+        while self.alive and proc and proc.poll() is None:
+            try:
+                data = self.input_queue.get(timeout=0.1)
+                if data is None:
+                    break
+                if proc.stdin and self.alive:
+                    proc.stdin.write(data.encode("utf-8"))
+                    proc.stdin.flush()
+                self.input_queue.task_done()
+            except queue.Empty:
+                continue
+            except Exception:
+                break
 
     def start_ssh(self, host: str, port: int = 22, username: str = "",
                   password: str | None = None,

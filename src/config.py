@@ -65,9 +65,10 @@ class UIConfig:
 
 @dataclass
 class Profile:
-    """A named shell profile (e.g., PowerShell, WSL, Git Bash)."""
+    """A named shell profile (e.g., PowerShell, WSL)."""
     command: str = "cmd.exe"
     args: list[str] = field(default_factory=list)
+    admin: bool = False
     working_dir: str | None = None
     font_size: int | None = None
     theme: str | None = None
@@ -136,6 +137,7 @@ class Config:
             cfg.profiles[name] = Profile(
                 command=str(data.get("command", "cmd.exe")),
                 args=list(data.get("args", [])),
+                admin=bool(data.get("admin", False)),
                 working_dir=data.get("working_dir"),
                 font_size=data.get("font_size"),
                 theme=data.get("theme"),
@@ -149,6 +151,57 @@ class Config:
                 cfg.keybindings.append(Keybinding(shortcut=shortcut, action=action))
 
         return cfg
+
+    @classmethod
+    def get_config_path(cls) -> Path:
+        """Return the resolved config file path."""
+        return _default_config_path()
+
+    def save(self, path: str | Path | None = None) -> None:
+        """Save configuration back to TOML."""
+        import toml
+        if path is None:
+            path = self.get_config_path()
+        else:
+            path = Path(path)
+
+        data: dict[str, Any] = {}
+
+        data["behavior"] = {"rtl_threshold": self.behavior.rtl_threshold}
+
+        data["ui"] = {
+            "opacity": self.ui.opacity,
+            "font_family": self.ui.font_family,
+            "font_size": self.ui.font_size,
+            "theme": self.ui.theme,
+            "cursor_style": self.ui.cursor_style,
+            "cursor_blink": self.ui.cursor_blink,
+        }
+
+        data["default_profile"] = self.default_profile
+
+        data["profiles"] = {}
+        for name, p in self.profiles.items():
+            prof: dict[str, Any] = {"command": p.command}
+            if p.args:
+                prof["args"] = p.args
+            if p.admin:
+                prof["admin"] = True
+            if p.working_dir:
+                prof["working_dir"] = p.working_dir
+            if p.font_size is not None:
+                prof["font_size"] = p.font_size
+            if p.theme:
+                prof["theme"] = p.theme
+            data["profiles"][name] = prof
+
+        data["keybindings"] = {}
+        for kb in self.keybindings:
+            data["keybindings"][kb.shortcut] = kb.action
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            toml.dump(data, f)
 
     def get_profile(self, name: str) -> Profile | None:
         """Get a profile by name, or None if not found."""

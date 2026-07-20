@@ -34,11 +34,17 @@ args = ["-NoLogo", "-NoProfile"]
 command = "pwsh.exe"
 args = ["-NoLogo", "-NoProfile"]
 
+[profiles.cmd_admin]
+command = "cmd.exe"
+admin = true
+
+[profiles.powershell_admin]
+command = "powershell.exe"
+args = ["-NoLogo", "-NoProfile"]
+admin = true
+
 [profiles.wsl]
 command = "wsl.exe"
-
-[profiles.git_bash]
-command = "C:\\Program Files\\Git\\bin\\bash.exe"
 
 # ── Custom Keybindings ─────────────────────────────────────────────────
 # Map a shortcut to a built-in action.

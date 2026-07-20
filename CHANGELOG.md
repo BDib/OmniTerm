@@ -39,6 +39,14 @@
 
 ### Removed
 - **Split panes**: Removed horizontal/vertical split functionality (didn't work as expected with the QWidget-based terminal)
+- **Git Bash profile**: Removed from default profiles
+
+### Profile Management
+- **"Manage Profiles" dialog**: Edit, add, duplicate, and delete profiles with a table-based UI (File → Manage Profiles)
+- **Run As Admin**: Each profile has an admin flag; admin profiles launch elevated via ShellExecuteW with pipe-based I/O
+- **"+" dropdown**: Shows all profiles with Admin badges; "Manage Profiles..." at the bottom
+- **Config persistence**: Profiles save back to `settings.toml` via `Config.save()`
+- **Admin profiles added**: `cmd_admin`, `powershell_admin` in default settings.toml
 
 ### Project Structure
 - Moved all Python source files to `src/` directory
