@@ -2,7 +2,7 @@ import re
 
 from PyQt6.QtWidgets import (
     QMainWindow, QTextEdit, QLineEdit, QApplication, QInputDialog,
-    QScrollBar, QWidget, QVBoxLayout, QTabWidget, QSplitter,
+    QScrollBar, QWidget, QVBoxLayout, QTabWidget,
     QMenuBar, QMenu, QFrame, QToolButton, QMenu as QMenuWidget,
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QSettings, QPoint
@@ -604,11 +604,6 @@ class MainWindow(QMainWindow):
 
         # ── Window ──
         win_menu = menu.addMenu("&Window")
-        _act(win_menu, "Split &Horizontal",
-             lambda: self._split(Qt.Orientation.Horizontal), "Ctrl+Shift+D")
-        _act(win_menu, "Split &Vertical",
-             lambda: self._split(Qt.Orientation.Vertical), "Ctrl+Shift+Backslash")
-        win_menu.addSeparator()
         _act(win_menu, "N&ext Tab", self._next_tab, "Ctrl+Tab")
         _act(win_menu, "&Previous Tab", self._prev_tab, "Ctrl+Shift+Tab")
 
@@ -710,43 +705,6 @@ class MainWindow(QMainWindow):
         name = shell.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
         name = name.replace(".exe", "")
         return name
-
-    # ── Split panes ────────────────────────────────────────────────────
-
-    def _split(self, orientation: Qt.Orientation) -> None:
-        """Split the current tab's terminal horizontally or vertically."""
-        current = self._tabs.currentWidget()
-        if not current or not isinstance(current, TerminalWidget):
-            return
-
-        # Determine shell command from current engine or default
-        shell_cmd = "cmd.exe"
-        for eng in self._tab_engines.values():
-            if eng is getattr(current, '_engine', None):
-                shell_cmd = getattr(eng, '_cmd', 'cmd.exe')
-                break
-
-        # Create a new terminal for the split
-        new_terminal = TerminalWidget(cfg=self._cfg, plain_mode=self._plain_mode)
-        from terminal_core import TerminalEngine
-        engine = TerminalEngine()
-        new_terminal.parent_engine = engine
-        engine.signals.text_ready.connect(new_terminal.append_shell_text)
-        engine.signals.exited.connect(new_terminal.show_exit_message)
-        engine.start(shell_cmd)
-
-        # Replace the single widget with a splitter
-        splitter = QSplitter(orientation)
-        splitter.addWidget(current)
-        splitter.addWidget(new_terminal)
-        splitter.setSizes([500, 500])  # Equal split
-
-        idx = self._tabs.indexOf(current)
-        self._tabs.removeTab(idx)
-        self._tabs.insertTab(idx, splitter, self._tabs.tabText(idx))
-        self._tabs.setCurrentIndex(idx)
-
-        new_terminal.setFocus()
 
     # ── Actions ────────────────────────────────────────────────────────
 
@@ -931,8 +889,6 @@ class MainWindow(QMainWindow):
             "close_tab": self._close_current_tab,
             "next_tab": self._next_tab,
             "prev_tab": self._prev_tab,
-            "split_horizontal": lambda: self._split(Qt.Orientation.Horizontal),
-            "split_vertical": lambda: self._split(Qt.Orientation.Vertical),
             "font_bigger": self._font_bigger,
             "font_smaller": self._font_smaller,
             "font_reset": self._font_reset,

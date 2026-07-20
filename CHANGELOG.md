@@ -35,8 +35,10 @@
 ### UI Improvements
 - **"+" tab button**: Corner widget with dropdown menu listing all profiles — click to open a new tab with that profile, or open Profile Picker
 - **RTL toggle**: Now propagates to both output QTextEdit and input QLineEdit
-- **Split panes**: Fixed to use proper sizing and share the current shell
 - **WSL encoding fix**: `wsl --list --verbose` outputs UTF-16LE — now decoded correctly
+
+### Removed
+- **Split panes**: Removed horizontal/vertical split functionality (didn't work as expected with the QWidget-based terminal)
 
 ### Project Structure
 - Moved all Python source files to `src/` directory

@@ -104,7 +104,6 @@ def test_builtin_actions_completeness():
     """BUILTIN_ACTIONS should contain all expected action names."""
     expected = {
         "new_tab", "close_tab", "next_tab", "prev_tab",
-        "split_horizontal", "split_vertical",
         "font_bigger", "font_smaller", "font_reset",
         "theme_cycle", "theme_picker",
         "toggle_opacity", "copy", "paste",

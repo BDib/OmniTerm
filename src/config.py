@@ -83,7 +83,6 @@ class Keybinding:
 # Built-in actions that keybindings can map to
 BUILTIN_ACTIONS = {
     "new_tab", "close_tab", "next_tab", "prev_tab",
-    "split_horizontal", "split_vertical",
     "font_bigger", "font_smaller", "font_reset",
     "theme_cycle", "theme_picker",
     "toggle_opacity", "copy", "paste",
