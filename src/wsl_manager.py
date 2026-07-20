@@ -27,7 +27,7 @@ class WSLManager:
         try:
             result = subprocess.run(
                 ["wsl", "--status"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, timeout=5,
                 creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
             )
             return result.returncode == 0
@@ -45,20 +45,23 @@ class WSLManager:
         try:
             result = subprocess.run(
                 ["wsl", "--list", "--verbose"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, timeout=5,
                 creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
             )
             if result.returncode != 0:
                 return []
 
+            # wsl --list outputs UTF-16LE on Windows
+            try:
+                text = result.stdout.decode("utf-16-le")
+            except Exception:
+                text = result.stdout.decode("utf-8", errors="replace")
+
             distributions = []
-            for line in result.stdout.strip().splitlines():
-                # Skip header line
+            for line in text.strip().splitlines():
                 line = line.strip()
                 if not line or line.startswith("NAME") or line.startswith("------"):
                     continue
-                # Parse: NAME  STATE  VERSION
-                # The output is a bit tricky — sometimes has BOM or extra spaces
                 line = line.lstrip("*").strip()
                 parts = line.split()
                 if len(parts) >= 2:

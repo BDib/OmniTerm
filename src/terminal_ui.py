@@ -3,7 +3,7 @@ import re
 from PyQt6.QtWidgets import (
     QMainWindow, QTextEdit, QLineEdit, QApplication, QInputDialog,
     QScrollBar, QWidget, QVBoxLayout, QTabWidget, QSplitter,
-    QMenuBar, QMenu, QFrame,
+    QMenuBar, QMenu, QFrame, QToolButton, QMenu as QMenuWidget,
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QSettings, QPoint
 from PyQt6.QtGui import (
@@ -484,6 +484,16 @@ class MainWindow(QMainWindow):
         self._tabs.currentChanged.connect(self._on_tab_changed)
         self.setCentralWidget(self._tabs)
 
+        # ── "+" button with profile dropdown ──
+        self._add_btn = QToolButton(self._tabs)
+        self._add_btn.setText("+")
+        self._add_btn.setFixedSize(28, 24)
+        self._add_btn.setStyleSheet(
+            "QToolButton { border: none; font-size: 16px; font-weight: bold; }"
+            "QToolButton:hover { background: #555; border-radius: 4px; }")
+        self._add_btn.clicked.connect(self._show_add_menu)
+        self._tabs.setCornerWidget(self._add_btn)
+
         # ── Menu bar ──
         self._build_menu_bar()
 
@@ -517,6 +527,32 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(400, 200)
 
     # ── Menu bar ──────────────────────────────────────────────────────
+
+    def _show_add_menu(self):
+        """Show a dropdown menu with profiles for opening a new tab."""
+        menu = QMenu(self)
+        if self._cfg:
+            for name, profile in self._cfg.profiles.items():
+                cmd = f"{profile.command} {' '.join(profile.args)}".strip()
+                action = menu.addAction(f"{name}  ({cmd})")
+                action.triggered.connect(
+                    lambda checked=False, n=name: self._open_profile_tab(n))
+        menu.addSeparator()
+        action = menu.addAction("Profile Picker...")
+        action.triggered.connect(self._profile_picker)
+        menu.exec(self._add_btn.mapToGlobal(self._add_btn.rect().bottomLeft()))
+
+    def _open_profile_tab(self, profile_name: str):
+        """Open a new tab using a named profile."""
+        if not self._cfg:
+            return
+        profile = self._cfg.get_profile(profile_name)
+        if not profile:
+            return
+        full_cmd = profile.command
+        if profile.args:
+            full_cmd = f"{profile.command} {' '.join(profile.args)}"
+        self.new_tab(shell=full_cmd)
 
     def _build_menu_bar(self):
         menu = self.menuBar()
@@ -609,9 +645,13 @@ class MainWindow(QMainWindow):
 
     def _toggle_rtl_window(self):
         if self.layoutDirection() == Qt.LayoutDirection.RightToLeft:
-            self.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+            new_dir = Qt.LayoutDirection.LeftToRight
         else:
-            self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+            new_dir = Qt.LayoutDirection.RightToLeft
+        self.setLayoutDirection(new_dir)
+        # Propagate to output and input widgets
+        for w in (self._output, self._input):
+            w.setLayoutDirection(new_dir)
 
     # ── Tab management ─────────────────────────────────────────────────
 
@@ -679,6 +719,13 @@ class MainWindow(QMainWindow):
         if not current or not isinstance(current, TerminalWidget):
             return
 
+        # Determine shell command from current engine or default
+        shell_cmd = "cmd.exe"
+        for eng in self._tab_engines.values():
+            if eng is getattr(current, '_engine', None):
+                shell_cmd = getattr(eng, '_cmd', 'cmd.exe')
+                break
+
         # Create a new terminal for the split
         new_terminal = TerminalWidget(cfg=self._cfg, plain_mode=self._plain_mode)
         from terminal_core import TerminalEngine
@@ -686,12 +733,13 @@ class MainWindow(QMainWindow):
         new_terminal.parent_engine = engine
         engine.signals.text_ready.connect(new_terminal.append_shell_text)
         engine.signals.exited.connect(new_terminal.show_exit_message)
-        engine.start("cmd.exe")
+        engine.start(shell_cmd)
 
         # Replace the single widget with a splitter
         splitter = QSplitter(orientation)
         splitter.addWidget(current)
         splitter.addWidget(new_terminal)
+        splitter.setSizes([500, 500])  # Equal split
 
         idx = self._tabs.indexOf(current)
         self._tabs.removeTab(idx)

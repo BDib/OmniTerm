@@ -32,6 +32,12 @@
 - **Doubled text**: Eliminated by using QLineEdit instead of forwarding keystrokes to shell
 - **PowerShell doubled text**: Fixed by adding `-NoProfile` to disable PSReadLine, and by handling CURSOR_POS for line rewrites
 
+### UI Improvements
+- **"+" tab button**: Corner widget with dropdown menu listing all profiles — click to open a new tab with that profile, or open Profile Picker
+- **RTL toggle**: Now propagates to both output QTextEdit and input QLineEdit
+- **Split panes**: Fixed to use proper sizing and share the current shell
+- **WSL encoding fix**: `wsl --list --verbose` outputs UTF-16LE — now decoded correctly
+
 ### Project Structure
 - Moved all Python source files to `src/` directory
 - Added `src/__init__.py`
