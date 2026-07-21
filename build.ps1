@@ -63,10 +63,10 @@ function Build-Nuitka {
     $env:TEMP = $nbuildTemp; $env:TMP = $nbuildTemp
 
     $nuitka_args = @(
-        "--standalone",
+        "--onefile",
         "--enable-plugin=pyqt6",
         "--output-dir=dist_nuitka",
-        "--output-filename=OmniTerm.exe",
+        "--output-filename=OmniTerm-win10-x64.exe",
         "--include-data-file=settings.toml=settings.toml",
         "--include-package=winpty",
         "--include-package=serial",
@@ -88,11 +88,10 @@ function Build-Nuitka {
     $env:TEMP = $oldTemp; $env:TMP = $oldTmp
 
     # Copy output to dist
-    if (Test-Path "dist_nuitka\Main.dist\OmniTerm.exe") {
+    if (Test-Path "dist_nuitka\OmniTerm-win10-x64.exe") {
         if (-not (Test-Path dist)) { New-Item -ItemType Directory -Path dist | Out-Null }
-        # Copy entire dist folder (DLLs, Qt plugins, settings.toml)
-        Copy-Item "dist_nuitka\Main.dist\*" "dist\" -Recurse -Force
-        Write-Host "Copied Nuitka build to dist\"
+        Copy-Item "dist_nuitka\OmniTerm-win10-x64.exe" "dist\OmniTerm-win10-x64.exe" -Force
+        Write-Host "Copied Nuitka onefile to dist\"
     }
 }
 

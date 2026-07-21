@@ -42,7 +42,8 @@ def _default_config_path() -> Path:
 
     # Next to the executable or script
     if getattr(sys, "frozen", False):
-        base = Path(sys._MEIPASS)
+        # Nuitka onefile extracts to a temp dir; use exe's own directory
+        base = Path(sys.executable).parent
     else:
         base = Path(__file__).resolve().parent.parent  # src/ → project root
 
