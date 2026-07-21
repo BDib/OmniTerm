@@ -29,10 +29,9 @@ def _default_config_path() -> Path:
 
     Search order:
       1. OMNITERM_CONFIG environment variable
-      2. Next to the executable / script (for frozen or dev builds)
-      3. %APPDATA%/OmniTerm/settings.toml (user config directory)
-    If no file exists at any location, return the path next to the
-    executable so ``Config.load`` can create it there.
+      2. Same directory as the executable/script
+      3. %APPDATA%/OmniTerm/settings.toml
+    Returns the first path that exists, or a path to create on first run.
     """
     env = os.environ.get("OMNITERM_CONFIG")
     if env:
@@ -40,33 +39,31 @@ def _default_config_path() -> Path:
         if p.is_file():
             return p
 
-    # Next to the executable or script
+    # Determine where to look — next to the exe, next to the script, or CWD
     if getattr(sys, "frozen", False):
-        # For onefile builds, the exe is extracted to a temp dir.
-        # Look for settings.toml in the CWD first (where user ran the exe from),
-        # then next to the exe, then in %APPDATA%.
-        cwd = Path(os.getcwd())
-        candidate = cwd / "settings.toml"
-        if candidate.is_file():
-            return candidate
-        base = Path(sys.executable).parent
+        # Frozen (PyInstaller or Nuitka): look next to the exe
+        exe_dir = Path(sys.executable).parent
     else:
-        base = Path(__file__).resolve().parent.parent  # src/ → project root
+        # Dev mode: look next to the script, then CWD
+        exe_dir = Path(__file__).resolve().parent.parent  # src/ → project root
 
-    candidate = base / "settings.toml"
+    # 1. Next to the exe / script
+    candidate = exe_dir / "settings.toml"
     if candidate.is_file():
         return candidate
 
-    # %APPDATA%/OmniTerm/
-    candidate = _appdata_dir() / "settings.toml"
-    if candidate.is_file():
-        return candidate
+    # 2. In CWD (for onefile builds that extract to temp)
+    cwd_candidate = Path(os.getcwd()) / "settings.toml"
+    if cwd_candidate.is_file():
+        return cwd_candidate
 
-    # Not found — return path next to exe so it gets created on first run
-    if getattr(sys, "frozen", False):
-        # For onefile builds, save next to the original exe (CWD), not the temp dir
-        return Path(os.getcwd()) / "settings.toml"
-    return base / "settings.toml"
+    # 3. %APPDATA%/OmniTerm/
+    appdata_candidate = _appdata_dir() / "settings.toml"
+    if appdata_candidate.is_file():
+        return appdata_candidate
+
+    # Not found — return CWD path so it gets created on first run
+    return cwd_candidate
 
 
 @dataclass
