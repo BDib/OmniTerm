@@ -565,7 +565,12 @@ class MainWindow(QMainWindow):
         self._settings = QSettings("OmniTerm", "OmniTerm")
         self._tab_engines: dict[int, "TerminalEngine"] = {}
 
-        self.setWindowTitle("OmniTerm")
+        # Detect if running as admin
+        self._is_admin = self._check_admin()
+        title = "OmniTerm"
+        if self._is_admin:
+            title = "OmniTerm [Administrator]"
+        self.setWindowTitle(title)
         self._apply_config()
         self._restore_geometry()
 
@@ -611,6 +616,15 @@ class MainWindow(QMainWindow):
 
         # ── Open first tab ──
         self.new_tab()
+
+    @staticmethod
+    def _check_admin() -> bool:
+        """Check if the current process is running as Administrator."""
+        try:
+            import ctypes
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        except Exception:
+            return False
 
     def _apply_config(self):
         ui = self._cfg.ui if self._cfg else None
@@ -663,6 +677,11 @@ class MainWindow(QMainWindow):
         import logging
         log = logging.getLogger(__name__)
 
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.information(self, "Admin Launch",
+            f"Launching {profile.command} as Administrator.\n"
+            f"You will see a UAC prompt next.")
+
         if getattr(sys, 'frozen', False):
             exe = sys.executable
         else:
@@ -689,14 +708,12 @@ class MainWindow(QMainWindow):
             )
             log.info("ShellExecuteW result: %d", result)
             if result <= 32:
-                from PyQt6.QtWidgets import QMessageBox
                 QMessageBox.warning(self, "Admin",
-                    "Failed to launch as admin.\n"
-                    "The UAC prompt may have been cancelled, or the\n"
-                    f"executable was not found:\n{exe}")
+                    f"Failed to launch as admin (code {result}).\n"
+                    f"Executable: {exe}\n"
+                    f"The UAC prompt may have been cancelled.")
         except Exception as e:
             log.error("ShellExecuteW exception: %s", e)
-            from PyQt6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Admin Error", str(e))
 
     def _manage_profiles(self):
@@ -877,11 +894,9 @@ class MainWindow(QMainWindow):
             return
         dlg = ProfilePickerDialog(self._cfg, self)
         if dlg.exec():
-            cmd, args = dlg.get_command()
-            full_cmd = cmd
-            if args:
-                full_cmd = f"{cmd} {' '.join(args)}"
-            self.new_tab(shell=full_cmd)
+            profile_name = dlg.get_selected()
+            if profile_name:
+                self._open_profile_tab(profile_name)
 
     def _ssh_connect(self) -> None:
         """Open the SSH connection dialog and start a new SSH tab."""

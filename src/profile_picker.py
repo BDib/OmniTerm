@@ -34,7 +34,10 @@ class ProfilePickerDialog(QDialog):
 
         self._list = QListWidget()
         for name, profile in config.profiles.items():
-            item = QListWidgetItem(f"{name}  —  {profile.command}")
+            label = f"{name}  —  {profile.command}"
+            if profile.admin:
+                label += "  [Admin]"
+            item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, name)
             self._list.addItem(item)
 
