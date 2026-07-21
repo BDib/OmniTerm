@@ -43,6 +43,15 @@ def _all(engine):
     return "".join(engine.written)
 
 
+def _send(w, app, key, text="", modifiers=None):
+    from PyQt6.QtGui import QKeyEvent
+    from PyQt6.QtCore import QEvent, Qt
+    if modifiers is None:
+        modifiers = Qt.KeyboardModifier.NoModifier
+    event = QKeyEvent(QEvent.Type.KeyPress, key, modifiers, text)
+    app.sendEvent(w, event)
+
+
 # ── Input via QTextEdit ──────────────────────────────────────────────
 
 
@@ -150,34 +159,21 @@ def test_focus_on_input():
     print("  PASS: Focus goes to input")
 
 
-# ── History ─────────────────────────────────────────────────────────
+# ── History (handled by the shell, not local) ──────────────────────
 
 
-def test_history_navigation():
-    """Up/Down arrows should navigate command history."""
+def test_history_forwarded_to_shell():
+    """Up/Down arrows should be forwarded to the shell for history."""
+    from PyQt6.QtCore import Qt
     w, engine, app = _make_widget()
-    # Submit first command
-    w._set_input_text("dir")
-    w._on_enter()
-    # Submit second command
-    w._set_input_text("echo hello")
-    w._on_enter()
-    # Up arrow should recall "echo hello"
-    w._history_up()
-    result = w._input_text()
-    assert result == "echo hello", f"Up should recall last, got {result!r}"
-    # Up again should recall "dir"
-    w._history_up()
-    result = w._input_text()
-    assert result == "dir", f"Up again should recall first, got {result!r}"
-    # Down should go back
-    w._history_down()
-    result = w._input_text()
-    assert result == "echo hello", f"Down should recall second, got {result!r}"
-    # Down past end clears
-    w._history_down()
-    assert w._input_text() == "", "Down past end should clear"
-    print("  PASS: History navigation")
+    # Send Up arrow to the INPUT widget (where eventFilter lives)
+    _send(w._input, app, Qt.Key.Key_Up)
+    assert _last(engine) == "\x1b[A", f"Up should send \\x1b[A, got {_last(engine)!r}"
+    # Send Down arrow
+    engine.flush()
+    _send(w._input, app, Qt.Key.Key_Down)
+    assert _last(engine) == "\x1b[B", f"Down should send \\x1b[B, got {_last(engine)!r}"
+    print("  PASS: History forwarded to shell")
 
 
 # ── Theme ────────────────────────────────────────────────────────────
@@ -222,7 +218,7 @@ def run_all():
     test_focus_on_input()
     print()
     print("  History:")
-    test_history_navigation()
+    test_history_forwarded_to_shell()
     print()
     print("  Theme:")
     test_theme_applies()

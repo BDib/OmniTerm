@@ -14,20 +14,23 @@ from PyQt6.QtWidgets import QApplication  # noqa: E402
 from config import Config, VERSION  # noqa: E402
 from terminal_ui import MainWindow  # noqa: E402
 
-# Enable fault handler to log segfaults — write next to the exe
+# Log file — only created on crash, not at startup
 if getattr(sys, "frozen", False):
     _app_dir = os.path.dirname(sys.executable)
 else:
     _app_dir = os.getcwd()
 _log_path = os.path.join(_app_dir, "errors.txt")
-faulthandler.enable(file=open(_log_path, "w"))
 
-# Catch all unhandled exceptions
+
+# Catch all unhandled exceptions — create errors.txt only when needed
 def _excepthook(exc_type, exc_value, exc_tb):
-    with open(_log_path, "a") as f:
-        f.write("=== Unhandled exception ===\n")
-        traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
-        f.write("\n")
+    try:
+        with open(_log_path, "a") as f:
+            f.write("=== Unhandled exception ===\n")
+            traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
+            f.write("\n")
+    except Exception:
+        pass
 
 sys.excepthook = _excepthook
 

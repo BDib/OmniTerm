@@ -122,11 +122,11 @@ def test_keybinding_dataclass():
     print("  PASS: Keybinding dataclass")
 
 
-def test_search_bar_import():
-    """SearchBar should be importable."""
-    from search_bar import SearchBar
-    assert SearchBar is not None
-    print("  PASS: SearchBar importable")
+def test_search_dialog_import():
+    """SearchDialog should be importable."""
+    from search_bar import SearchDialog
+    assert SearchDialog is not None
+    print("  PASS: SearchDialog importable")
 
 
 def test_profile_picker_import():
@@ -148,7 +148,7 @@ def run_all():
     test_config_ignores_invalid_actions()
     test_builtin_actions_completeness()
     test_keybinding_dataclass()
-    test_search_bar_import()
+    test_search_dialog_import()
     test_profile_picker_import()
     print("All profile/keybinding tests passed!\n")
 

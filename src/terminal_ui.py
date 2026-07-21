@@ -17,7 +17,7 @@ from themes import get_theme, list_themes
 from ansi_parser import parse_ansi, SpanKind, strip_ansi
 from ansi_renderer import span_to_format
 from mouse_handler import MouseHandler
-from search_bar import SearchBar
+from search_bar import SearchDialog
 from ssh_dialog import SSHDialog
 from serial_dialog import SerialDialog
 from profile_picker import ProfilePickerDialog
@@ -51,11 +51,6 @@ class TerminalWidget(QWidget):
         self._mouse_last_pos = QPoint()
         self._opaque = True
 
-        # ── Command history ──
-        self._history: list[str] = []
-        self._hist_idx = -1          # -1 = not browsing
-        self._hist_saved = ""        # saved input while browsing
-
         # ── Current path (detected from shell prompt) ──
         self._current_path = ""
         self._prompt_prefix = ""
@@ -74,9 +69,8 @@ class TerminalWidget(QWidget):
         self._output.setWordWrapMode(QTextOption.WrapMode.WordWrap)
         layout.addWidget(self._output, 1)
 
-        # ── Search bar (hidden by default, shown on Ctrl+F / F3) ──
-        self._search_bar = SearchBar(self._output)
-        self._search_bar.hide()
+        # Search dialog (created on demand)
+        self._search_dialog = None
 
         # Separator line
         sep = QFrame()
@@ -130,24 +124,110 @@ class TerminalWidget(QWidget):
     # ── Send command ──────────────────────────────────────────────────
 
     def eventFilter(self, obj, event):
-        """Intercept key events in the input QTextEdit."""
+        """Intercept navigation keys in the input QTextEdit.
+
+        Text entry is handled by QTextEdit natively (characters appear
+        in the input area).  Only navigation keys are forwarded to the
+        shell so the shell can track cursor position for line editing.
+        """
         from PyQt6.QtCore import QEvent
         if obj is self._input and event.type() == QEvent.Type.KeyPress:
             key = event.key()
-            mods = event.modifiers()
-            # Enter (without Shift) sends the command
-            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and \
-                    not (mods & Qt.KeyboardModifier.ShiftModifier):
+            # Enter sends command
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self._on_enter()
                 return True
-            # Up/Down arrows for history
-            if key == Qt.Key.Key_Up:
-                self._history_up()
-                return True
-            if key == Qt.Key.Key_Down:
-                self._history_down()
-                return True
-        return super().eventFilter(obj, event)
+            # Navigation keys — forward to shell, consume so QTextEdit
+            # doesn't also move its own cursor
+            nav_keys = {
+                Qt.Key.Key_Up, Qt.Key.Key_Down,
+                Qt.Key.Key_Left, Qt.Key.Key_Right,
+                Qt.Key.Key_Home, Qt.Key.Key_End,
+                Qt.Key.Key_PageUp, Qt.Key.Key_PageDown,
+            }
+            if key in nav_keys and self.parent_engine and self.parent_engine.is_ready:
+                self._forward_key(event)
+                return True  # consume — don't let QTextEdit move its cursor
+        return False  # let QTextEdit handle everything else (text entry)
+
+    def _forward_key(self, event):
+        """Map a QKeyEvent to VT escape sequences and send to the shell."""
+        key = event.key()
+        text = event.text()
+        mods = event.modifiers()
+        w = self.parent_engine.write
+
+        # ── Ctrl combinations ──
+        if mods & Qt.KeyboardModifier.ControlModifier:
+            ctrl = {
+                Qt.Key.Key_C: "\x03", Qt.Key.Key_D: "\x04",
+                Qt.Key.Key_Z: "\x1a", Qt.Key.Key_L: "\x0c",
+                Qt.Key.Key_A: "\x01", Qt.Key.Key_E: "\x05",
+                Qt.Key.Key_K: "\x0b", Qt.Key.Key_U: "\x15",
+                Qt.Key.Key_W: "\x17", Qt.Key.Key_S: "\x13",
+            }
+            if key in ctrl:
+                w(ctrl[key])
+                return
+            # Ctrl+arrow word-movement
+            arrow_map = {Qt.Key.Key_Up: "A", Qt.Key.Key_Down: "B",
+                         Qt.Key.Key_Right: "C", Qt.Key.Key_Left: "D"}
+            if key in arrow_map:
+                w(f"\x1b[1;5{arrow_map[key]}")
+                return
+            return
+
+        # ── Backspace ──
+        if key == Qt.Key.Key_Backspace:
+            w("\x7f")
+            return
+
+        # ── Tab ──
+        if key == Qt.Key.Key_Tab:
+            w("\t")
+            return
+
+        # ── Delete ──
+        if key == Qt.Key.Key_Delete:
+            w("\x1b[3~")
+            return
+
+        # ── Insert ──
+        if key == Qt.Key.Key_Insert:
+            w("\x1b[2~")
+            return
+
+        # ── Arrow keys ──
+        arrow = {Qt.Key.Key_Up: "A", Qt.Key.Key_Down: "B",
+                 Qt.Key.Key_Right: "C", Qt.Key.Key_Left: "D"}
+        if key in arrow:
+            w(f"\x1b[{arrow[key]}")
+            return
+
+        # ── Home / End ──
+        if key == Qt.Key.Key_Home:
+            w("\x1b[H")
+            return
+        if key == Qt.Key.Key_End:
+            w("\x1b[F")
+            return
+
+        # ── Page Up / Page Down ──
+        if key == Qt.Key.Key_PageUp:
+            w("\x1b[5~")
+            return
+        if key == Qt.Key.Key_PageDown:
+            w("\x1b[6~")
+            return
+
+        # ── Escape ──
+        if key == Qt.Key.Key_Escape:
+            w("\x1b")
+            return
+
+        # ── Printable characters ──
+        if text:
+            w(text)
 
     def _input_text(self) -> str:
         """Get plain text from the input QTextEdit."""
@@ -165,36 +245,10 @@ class TerminalWidget(QWidget):
         """Clear the input QTextEdit."""
         self._input.clear()
 
-    def _history_up(self):
-        """Load the previous command from history."""
-        if not self._history:
-            return
-        if self._hist_idx == -1:
-            self._hist_saved = self._input_text()
-            self._hist_idx = len(self._history) - 1
-        elif self._hist_idx > 0:
-            self._hist_idx -= 1
-        self._set_input_text(self._history[self._hist_idx])
-
-    def _history_down(self):
-        """Load the next command from history."""
-        if self._hist_idx < 0:
-            return
-        if self._hist_idx < len(self._history) - 1:
-            self._hist_idx += 1
-            self._set_input_text(self._history[self._hist_idx])
-        else:
-            self._hist_idx = -1
-            self._set_input_text(self._hist_saved)
-
     def _on_enter(self):
         """Send the current input line to the shell."""
         cmd = self._input_text().strip()
         self._clear_input()
-        self._hist_idx = -1
-        self._hist_saved = ""
-        if cmd.strip():
-            self._history.append(cmd)
         if not self.parent_engine or not self.parent_engine.is_ready:
             return
         # Send to shell
@@ -288,11 +342,11 @@ class TerminalWidget(QWidget):
             self._search_prev)
 
     def _search_next(self):
-        """F3: Open search bar or find next."""
+        """F3: Open search dialog or find next."""
         widget = self._tabs.currentWidget()
         if isinstance(widget, TerminalWidget):
-            if widget._search_bar.isVisible():
-                widget._search_bar.find_next()
+            if widget._search_dialog and widget._search_dialog.isVisible():
+                widget._search_dialog.find_next()
             else:
                 self._open_search()
 
@@ -300,11 +354,12 @@ class TerminalWidget(QWidget):
         """Shift+F3: Find previous."""
         widget = self._tabs.currentWidget()
         if isinstance(widget, TerminalWidget):
-            if widget._search_bar.isVisible():
-                widget._search_bar.find_prev()
+            if widget._search_dialog and widget._search_dialog.isVisible():
+                widget._search_dialog.find_prev()
             else:
                 self._open_search()
-                widget._search_bar.find_prev()
+                if widget._search_dialog:
+                    widget._search_dialog.find_prev()
 
     # ── Opacity ────────────────────────────────────────────────────────
 
@@ -792,16 +847,26 @@ class MainWindow(QMainWindow):
         _act(win_menu, "&Previous Tab", self._prev_tab, "Ctrl+Shift+Tab")
 
     def _menu_copy(self):
+        """Copy selected text from the current terminal's output or input."""
         widget = self._tabs.currentWidget()
         if isinstance(widget, TerminalWidget):
-            widget._copy_selection()
+            # Try output first
+            cursor = widget._output.textCursor()
+            if cursor.hasSelection():
+                QApplication.clipboard().setText(cursor.selectedText())
+            else:
+                # Try input
+                cursor = widget._input.textCursor()
+                if cursor.hasSelection():
+                    QApplication.clipboard().setText(cursor.selectedText())
 
     def _menu_cut(self):
+        """Cut selected text from the INPUT area only (output is read-only)."""
         widget = self._tabs.currentWidget()
         if isinstance(widget, TerminalWidget):
-            widget._copy_selection()
-            cursor = widget.textCursor()
+            cursor = widget._input.textCursor()
             if cursor.hasSelection():
+                QApplication.clipboard().setText(cursor.selectedText())
                 cursor.removeSelectedText()
 
     def _menu_paste(self):
@@ -893,11 +958,12 @@ class MainWindow(QMainWindow):
     # ── Actions ────────────────────────────────────────────────────────
 
     def _open_search(self) -> None:
-        """Open the search bar and attach it to the current terminal's output."""
+        """Open the search dialog for the current terminal's output."""
         widget = self._tabs.currentWidget()
         if isinstance(widget, TerminalWidget):
-            widget._search_bar.attach(widget._output)
-            widget._search_bar.open_bar()
+            if widget._search_dialog is None:
+                widget._search_dialog = SearchDialog(widget._output, self)
+            widget._search_dialog.open_dialog()
 
     def _profile_picker(self) -> None:
         """Open the profile picker dialog and launch the selected shell."""

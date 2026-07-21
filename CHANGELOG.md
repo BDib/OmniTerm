@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.6.0 — Session 6 (2026-07-21)
+
+### Config & Startup
+- **settings.toml auto-creation** — If settings.toml is missing, it's created with sensible defaults on first run
+- **Config fallback** — All settings have sensible defaults; missing config gracefully falls back
+- **errors.txt** — Only created on crash (no longer created at startup)
+
+### Search
+- **SearchDialog** — Converted from broken floating widget to proper QDialog popup
+- **F3/Shift+F3** — Next/previous match navigation
+- **All instances highlighted** — Blue highlights on all matches, counter shows position
+
+### Input & Navigation
+- **Input area**: QTextEdit handles text entry natively (characters appear there)
+- **Navigation keys**: Arrows, Home/End forwarded to shell for cursor movement
+- **Up/Down**: Forwarded to shell for command history
+- **Output area**: Read-only, normal navigation when focused
+
+### Menu & Edit
+- **Cut**: Only works in input area (output is read-only)
+- **Copy**: Works in both output and input
+- **Find**: Opens proper search dialog (F3 / Ctrl+F)
+
+---
+
 ## v1.5.0 — Session 5 (2026-07-21)
 
 ### Search / Find

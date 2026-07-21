@@ -1,107 +1,88 @@
 """
-Search bar widget for OmniTerm.
+Search dialog for OmniTerm.
 
-Provides a Ctrl+F / F3 search bar that highlights matches in the terminal output.
-Positioned at the bottom of the output QTextEdit.
+A popup dialog for finding text in the terminal output.
+Supports F3 / Shift+F3 for next/previous match.
 """
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLineEdit, QLabel, QPushButton, QTextEdit
-from PyQt6.QtCore import pyqtSignal, Qt
-from PyQt6.QtGui import QTextCursor, QTextCharFormat, QColor
+from PyQt6.QtWidgets import (
+    QDialog, QHBoxLayout, QLineEdit, QLabel, QPushButton,
+    QTextEdit, QVBoxLayout,
+)
+from PyQt6.QtGui import QTextCursor, QTextCharFormat, QColor, QTextDocument
+from PyQt6.QtCore import Qt
 
 
-class SearchBar(QWidget):
-    """Search bar that sits at the bottom of the output QTextEdit."""
+class SearchDialog(QDialog):
+    """Popup dialog for finding text in the terminal output."""
 
-    closed = pyqtSignal()
-
-    def __init__(self, parent=None):
+    def __init__(self, target: QTextEdit, parent=None):
         super().__init__(parent)
-        self._target = parent  # The output QTextEdit we search in
+        self._target = target
         self._last_query = ""
 
-        self.setFixedHeight(32)
-        self.setStyleSheet(
-            "SearchBar { background: #2a2a2a; border-top: 1px solid #444; }")
+        self.setWindowTitle("Find")
+        self.setWindowFlags(
+            Qt.WindowType.Dialog
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.FramelessWindowHint
+        )
+        self.setFixedWidth(420)
+        self.setFixedHeight(50)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 2, 8, 2)
-        layout.setSpacing(4)
-
-        self._label = QLabel("Find:")
-        self._label.setStyleSheet("color: #aaa;")
-        layout.addWidget(self._label)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
 
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Search in output...")
-        self._input.setFixedWidth(250)
+        self._input.setPlaceholderText("Find in output...")
+        self._input.setClearButtonEnabled(True)
         self._input.returnPressed.connect(self.find_next)
         self._input.textChanged.connect(self._on_text_changed)
-        layout.addWidget(self._input)
+        layout.addWidget(self._input, 1)
 
         self._count_label = QLabel("")
-        self._count_label.setStyleSheet("color: #aaa; min-width: 60px;")
+        self._count_label.setFixedWidth(60)
         layout.addWidget(self._count_label)
 
-        self._prev_btn = QPushButton("\u25B2")
-        self._prev_btn.setFixedSize(24, 24)
+        self._prev_btn = QPushButton("\u25B2 Prev")
+        self._prev_btn.setFixedHeight(28)
         self._prev_btn.clicked.connect(self.find_prev)
         layout.addWidget(self._prev_btn)
 
-        self._next_btn = QPushButton("\u25BC")
-        self._next_btn.setFixedSize(24, 24)
+        self._next_btn = QPushButton("Next \u25BC")
+        self._next_btn.setFixedHeight(28)
+        self._next_btn.setDefault(True)
         self._next_btn.clicked.connect(self.find_next)
         layout.addWidget(self._next_btn)
 
-        layout.addStretch()
-
         self._close_btn = QPushButton("\u2715")
-        self._close_btn.setFixedSize(24, 24)
-        self._close_btn.clicked.connect(self.close_bar)
+        self._close_btn.setFixedSize(28, 28)
+        self._close_btn.clicked.connect(self.close)
         layout.addWidget(self._close_btn)
 
-        self.setVisible(False)
-
-    def resizeEvent(self, event):
-        """Keep the search bar at the bottom of the parent QTextEdit."""
-        super().resizeEvent(event)
-        if self._target:
-            pw = self._target.width()
-            self.setFixedWidth(pw)
-            self.move(0, self._target.height() - self.height())
-
-    def open_bar(self) -> None:
-        """Show the search bar, position it, and focus the input."""
-        if self._target:
-            self.setFixedWidth(self._target.width())
-            self.move(0, self._target.height() - self.height())
-        self.setVisible(True)
+    def open_dialog(self) -> None:
+        """Show the dialog and focus the input."""
+        if self.parent():
+            pr = self.parent().geometry()
+            self.move(pr.right() - self.width() - 20, pr.top() + 40)
+        self.show()
+        self.raise_()
         self._input.setFocus()
         self._input.selectAll()
-        # If there's already text, search immediately
-        if self._input.text():
-            self._on_text_changed(self._input.text())
-
-    def close_bar(self) -> None:
-        """Hide the search bar and clear highlights."""
-        self._clear_highlights()
-        self.setVisible(False)
-        if self._target:
-            self._target.setFocus()
-        self.closed.emit()
 
     def find_next(self) -> None:
-        """Find the next occurrence of the search text."""
+        """Find next occurrence."""
         self._find(direction=1)
 
     def find_prev(self) -> None:
-        """Find the previous occurrence."""
+        """Find previous occurrence."""
         self._find(direction=-1)
 
     def _on_text_changed(self, text: str) -> None:
-        """Re-highlight all matches when the search text changes."""
+        """Highlight all matches and find the first."""
         self._last_query = text
         self._highlight_all(text)
         if text:
@@ -119,10 +100,11 @@ class SearchBar(QWidget):
                 cursor.setPosition(cursor.selectionEnd())
             else:
                 cursor.setPosition(cursor.selectionStart())
+            self._target.setTextCursor(cursor)
 
-        flags = QTextCursor.SelectionFlag.FindCaseSensitively
+        flags = QTextDocument.FindFlag(0)
         if direction < 0:
-            flags |= QTextCursor.SelectionFlag.FindBackward
+            flags |= QTextDocument.FindFlag.FindBackward
 
         found = self._target.find(self._last_query, flags)
 
@@ -130,10 +112,10 @@ class SearchBar(QWidget):
             self._update_count()
         else:
             # Wrap around
-            cursor.movePosition(
-                QTextCursor.MoveOperation.Start if direction > 0
-                else QTextCursor.MoveOperation.End
-            )
+            if direction > 0:
+                cursor.movePosition(QTextCursor.MoveOperation.Start)
+            else:
+                cursor.movePosition(QTextCursor.MoveOperation.End)
             self._target.setTextCursor(cursor)
             self._target.find(self._last_query, flags)
             self._update_count()
@@ -154,16 +136,16 @@ class SearchBar(QWidget):
 
         count = 0
         while True:
-            cursor = self._target.document().find(
+            found = self._target.document().find(
                 text, cursor.position(),
-                QTextCursor.SelectionFlag.FindCaseSensitively,
             )
-            if cursor.isNull():
+            if found.isNull():
                 break
             extra_sel = QTextEdit.ExtraSelection()
             extra_sel.format = fmt
-            extra_sel.cursor = cursor
+            extra_sel.cursor = found
             extra_selections.append(extra_sel)
+            cursor.setPosition(found.selectionEnd())
             count += 1
 
         self._target.setExtraSelections(extra_selections)
@@ -181,39 +163,34 @@ class SearchBar(QWidget):
             return
 
         # Count total occurrences
-        cursor = self._target.textCursor()
-        saved_pos = cursor.selectionStart() if cursor.hasSelection() else cursor.position()
-        cursor.movePosition(QTextCursor.MoveOperation.Start)
-
+        scan_pos = 0
         total = 0
         while True:
-            cursor = self._target.document().find(
-                self._last_query, cursor.position(),
-                QTextCursor.SelectionFlag.FindCaseSensitively,
-            )
-            if cursor.isNull():
+            found = self._target.document().find(self._last_query, scan_pos)
+            if found.isNull():
                 break
             total += 1
+            scan_pos = found.selectionEnd()
 
         # Find current position
-        sel_cursor = self._target.textCursor()
+        sel = self._target.textCursor()
         current = 0
-        if sel_cursor.hasSelection():
-            cursor.movePosition(QTextCursor.MoveOperation.Start)
+        if sel.hasSelection():
+            scan_pos = 0
             idx = 0
             while True:
-                cursor = self._target.document().find(
-                    self._last_query, cursor.position(),
-                    QTextCursor.SelectionFlag.FindCaseSensitively,
-                )
-                if cursor.isNull():
+                found = self._target.document().find(self._last_query, scan_pos)
+                if found.isNull():
                     break
                 idx += 1
-                if cursor.selectionStart() == sel_cursor.selectionStart():
+                scan_pos = found.selectionEnd()
+                if found.selectionStart() == sel.selectionStart():
                     current = idx
                     break
 
-        if total > 0:
-            self._count_label.setText(f"{current}/{total}")
-        else:
-            self._count_label.setText("No match")
+        self._count_label.setText(f"{current}/{total}" if total else "No match")
+
+    def closeEvent(self, event):
+        """Clean up highlights when dialog closes."""
+        self._clear_highlights()
+        super().closeEvent(event)

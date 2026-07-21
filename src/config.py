@@ -13,7 +13,7 @@ from typing import Any
 
 import toml
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 
 
 def _appdata_dir() -> Path:
@@ -25,13 +25,22 @@ def _appdata_dir() -> Path:
 
 
 def _default_config_path() -> Path:
-    """Resolve the config file location."""
+    """Resolve the config file location.
+
+    Search order:
+      1. OMNITERM_CONFIG environment variable
+      2. Next to the executable / script (for frozen or dev builds)
+      3. %APPDATA%/OmniTerm/settings.toml (user config directory)
+    If no file exists at any location, return the path next to the
+    executable so ``Config.load`` can create it there.
+    """
     env = os.environ.get("OMNITERM_CONFIG")
     if env:
         p = Path(env)
         if p.is_file():
             return p
 
+    # Next to the executable or script
     if getattr(sys, "frozen", False):
         base = Path(sys._MEIPASS)
     else:
@@ -41,11 +50,15 @@ def _default_config_path() -> Path:
     if candidate.is_file():
         return candidate
 
+    # %APPDATA%/OmniTerm/
     candidate = _appdata_dir() / "settings.toml"
     if candidate.is_file():
         return candidate
 
-    return candidate
+    # Not found — return path next to exe so it gets created on first run
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent / "settings.toml"
+    return base / "settings.toml"
 
 
 @dataclass
@@ -102,7 +115,11 @@ class Config:
 
     @classmethod
     def load(cls, path: str | Path | None = None) -> "Config":
-        """Load configuration from a TOML file."""
+        """Load configuration from a TOML file.
+
+        If the file doesn't exist, creates it with sensible defaults.
+        If the file exists but is malformed, falls back to defaults.
+        """
         if path is None:
             path = _default_config_path()
         else:
@@ -111,6 +128,11 @@ class Config:
         cfg = cls()
 
         if not path.is_file():
+            # Create settings.toml with defaults next to the executable
+            try:
+                cfg.save(path)
+            except Exception:
+                pass  # non-critical — defaults still work
             return cfg
 
         try:
