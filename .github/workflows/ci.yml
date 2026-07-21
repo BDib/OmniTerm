@@ -35,11 +35,14 @@ jobs:
         ruff check src/ tests/ --select E402,F || true
 
     - name: Run tests
-      run: python tests/run_all.py
-      timeout-minutes: 5
+      run: |
+        python -m tests.run_all
+      timeout-minutes: 3
+      env:
+        QT_QPA_PLATFORM: offscreen
 
     - name: Build (PyInstaller check)
-      if: matrix.python-version == '3.12'
+      if: success() && matrix.python-version == '3.12'
       run: pyinstaller OmniTerm.spec --noconfirm
 
     - name: Upload artifact
