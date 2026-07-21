@@ -94,7 +94,7 @@ def test_erase_line_after_text():
 def test_plain_mode_text():
     """Plain mode should work correctly."""
     from PyQt6.QtWidgets import QApplication
-    app = QApplication.instance() or QApplication(sys.argv)
+    QApplication.instance() or QApplication(sys.argv)
     from terminal_ui import TerminalWidget
     from config import Config
     cfg = Config()

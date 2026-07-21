@@ -22,7 +22,13 @@ def main():
     passed = 0
     failed = 0
 
-    for module in (test_config, test_themes, test_ansi_parser, test_mouse_scroll, test_tabs, test_profiles, test_distribution, test_ssh, test_serial_wsl, test_rendering, test_keyboard):
+    modules = [
+        test_config, test_themes, test_ansi_parser, test_mouse_scroll,
+        test_tabs, test_profiles, test_distribution, test_ssh,
+        test_serial_wsl, test_rendering, test_keyboard,
+    ]
+
+    for module in modules:
         try:
             module.run_all()
             passed += 1

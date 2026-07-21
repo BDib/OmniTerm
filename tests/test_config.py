@@ -10,7 +10,7 @@ from pathlib import Path
 # Add parent dir to path so we can import modules
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from config import Config, UIConfig, UIBehavior, VERSION
+from config import Config, VERSION
 
 
 def test_version_exists():

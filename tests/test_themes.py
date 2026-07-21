@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from themes import get_theme, list_themes, CAMPBELL, SOLARIZED_DARK, ONE_HALF_DARK, Theme
+from themes import get_theme, list_themes, CAMPBELL, SOLARIZED_DARK
 
 
 def test_list_themes():
@@ -57,7 +57,8 @@ def test_theme_has_ansi_colors():
             "bright_blue", "bright_magenta", "bright_cyan", "bright_white",
         ):
             assert key in t.ansi, f"Theme {name} missing ANSI key: {key}"
-            assert t.ansi[key].startswith("#"), f"Theme {name} color {key} not hex: {t.ansi[key]}"
+            color = t.ansi[key]
+            assert color.startswith("#"), f"Theme {name} color {key} not hex: {color}"
     print("  PASS: All themes have 16 valid ANSI colors")
 
 

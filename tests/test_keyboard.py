@@ -52,7 +52,7 @@ def test_type_and_enter():
     w._set_input_text("dir")
     w._on_enter()
     assert "dir" in _all(engine), f"Expected 'dir' in output, got: {engine.written}"
-    assert w._input_text() == "", f"Input should be cleared"
+    assert w._input_text() == "", "Input should be cleared"
     print("  PASS: Type + Enter sends command")
 
 
@@ -80,7 +80,7 @@ def test_engine_not_ready():
     engine.is_ready = False
     w._set_input_text("dir")
     w._on_enter()
-    assert len(engine.written) == 0, f"Should not send when engine not ready"
+    assert len(engine.written) == 0, "Should not send when engine not ready"
     print("  PASS: Engine not ready blocks send")
 
 
@@ -164,16 +164,19 @@ def test_history_navigation():
     w._on_enter()
     # Up arrow should recall "echo hello"
     w._history_up()
-    assert w._input_text() == "echo hello", f"Up should recall last, got {w._input_text()!r}"
+    result = w._input_text()
+    assert result == "echo hello", f"Up should recall last, got {result!r}"
     # Up again should recall "dir"
     w._history_up()
-    assert w._input_text() == "dir", f"Up again should recall first, got {w._input_text()!r}"
+    result = w._input_text()
+    assert result == "dir", f"Up again should recall first, got {result!r}"
     # Down should go back
     w._history_down()
-    assert w._input_text() == "echo hello", f"Down should recall second, got {w._input_text()!r}"
+    result = w._input_text()
+    assert result == "echo hello", f"Down should recall second, got {result!r}"
     # Down past end clears
     w._history_down()
-    assert w._input_text() == "", f"Down past end should clear, got {w._input_text()!r}"
+    assert w._input_text() == "", "Down past end should clear"
     print("  PASS: History navigation")
 
 

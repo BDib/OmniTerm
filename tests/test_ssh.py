@@ -77,7 +77,6 @@ def test_ssh_connect_action_in_config():
 
 def test_ssh_connect_action_resolves():
     """_resolve_action should handle ssh_connect."""
-    from terminal_core import TerminalEngine
     # We can't easily create a MainWindow without QApplication, but we can
     # verify the action name is valid
     from config import BUILTIN_ACTIONS

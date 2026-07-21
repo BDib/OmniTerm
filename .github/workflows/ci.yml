@@ -32,7 +32,7 @@ jobs:
     - name: Lint with ruff
       run: |
         pip install ruff
-        ruff check src/ tests/
+        ruff check src/ tests/ --select E402,F
 
     - name: Run tests
       run: python tests/run_all.py

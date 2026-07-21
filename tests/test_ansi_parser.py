@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from ansi_parser import (
-    parse_ansi, strip_ansi, SpanKind, SGRState, Span, indexed_to_rgb,
+    parse_ansi, strip_ansi, SpanKind, SGRState, indexed_to_rgb,
 )
 
 

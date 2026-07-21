@@ -4,7 +4,8 @@ from winpty import PtyProcess
 
 def test_line_endings():
     log_file = "nudge.log"
-    if os.path.exists(log_file): os.remove(log_file)
+    if os.path.exists(log_file):
+        os.remove(log_file)
     
     proc = PtyProcess.spawn('cmd.exe')
     time.sleep(1) # Wait for cmd to stabilize
