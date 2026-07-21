@@ -10,20 +10,25 @@
 
 from pathlib import Path
 import winpty as _winpty_mod
+import glob as _glob
 
 src_root = Path(SPECPATH)
 _winpty_dir = Path(_winpty_mod.__file__).parent
 
+# Find the winpty .pyd dynamically (differs by Python version)
+_winpty_pyd = _glob.glob(str(_winpty_dir / "_winpty*.pyd"))
+_binaries = []
+for f in _winpty_pyd:
+    _binaries.append((f, "winpty"))
+for dll in ["conpty.dll", "winpty.dll", "winpty-agent.exe", "OpenConsole.exe"]:
+    p = _winpty_dir / dll
+    if p.exists():
+        _binaries.append((str(p), "winpty"))
+
 a = Analysis(
     [str(src_root / "src" / "Main.py")],
     pathex=[str(src_root), str(src_root / "src")],
-    binaries=[
-        (str(_winpty_dir / "_winpty.cp313-win_amd64.pyd"), "winpty"),
-        (str(_winpty_dir / "conpty.dll"), "winpty"),
-        (str(_winpty_dir / "winpty.dll"), "winpty"),
-        (str(_winpty_dir / "winpty-agent.exe"), "winpty"),
-        (str(_winpty_dir / "OpenConsole.exe"), "winpty"),
-    ],
+    binaries=_binaries,
     datas=[
         (str(src_root / "settings.toml"), "."),
     ],
