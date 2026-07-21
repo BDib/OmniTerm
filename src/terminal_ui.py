@@ -671,13 +671,13 @@ class MainWindow(QMainWindow):
         import ctypes
         import sys
         import os
-        import logging
-        log = logging.getLogger(__name__)
 
-        from PyQt6.QtWidgets import QMessageBox
-        QMessageBox.information(self, "Admin Launch",
-            f"Launching {profile.command} as Administrator.\n"
-            f"You will see a UAC prompt next.")
+        # Find the profile name
+        profile_name = ""
+        for name, p in self._cfg.profiles.items():
+            if p is profile:
+                profile_name = name
+                break
 
         if getattr(sys, 'frozen', False):
             exe = sys.executable
@@ -688,29 +688,22 @@ class MainWindow(QMainWindow):
             if not os.path.isfile(main_py):
                 main_py = os.path.join(os.getcwd(), "src", "Main.py")
 
-        full_cmd = profile.command
-        if profile.args:
-            full_cmd = f"{profile.command} {' '.join(profile.args)}"
-
         if getattr(sys, 'frozen', False):
-            shell_arg = f'--shell "{full_cmd}"'
+            shell_arg = f'--profile {profile_name}'
         else:
-            shell_arg = f'"{main_py}" --shell "{full_cmd}"'
-
-        log.info("Launching as admin: %s %s", exe, shell_arg)
+            shell_arg = f'"{main_py}" --profile {profile_name}'
 
         try:
             result = ctypes.windll.shell32.ShellExecuteW(
                 None, "runas", exe, shell_arg, None, 1
             )
-            log.info("ShellExecuteW result: %d", result)
             if result <= 32:
+                from PyQt6.QtWidgets import QMessageBox
                 QMessageBox.warning(self, "Admin",
-                    f"Failed to launch as admin (code {result}).\n"
-                    f"Executable: {exe}\n"
-                    f"The UAC prompt may have been cancelled.")
+                    "Could not launch as admin.\n"
+                    "The UAC prompt may have been cancelled.")
         except Exception as e:
-            log.error("ShellExecuteW exception: %s", e)
+            from PyQt6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Admin Error", str(e))
 
     def _manage_profiles(self):
