@@ -558,7 +558,7 @@ class MainWindow(QMainWindow):
     Each tab contains its own TerminalWidget + TerminalEngine.
     """
 
-    def __init__(self, cfg=None, plain_mode=False):
+    def __init__(self, cfg=None, plain_mode=False, shell=None):
         super().__init__()
         self._cfg = cfg
         self._plain_mode = plain_mode
@@ -612,7 +612,10 @@ class MainWindow(QMainWindow):
                     QShortcut(QKeySequence(kb.shortcut), self).activated.connect(action_fn)
 
         # ── Open first tab ──
-        self.new_tab()
+        if shell:
+            self.new_tab(shell=shell)
+        else:
+            self.new_tab()
 
     @staticmethod
     def _check_admin() -> bool:

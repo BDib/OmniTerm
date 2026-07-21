@@ -67,10 +67,7 @@ def run():
     elif args.shell:
         shell_cmd = args.shell
 
-    window = MainWindow(cfg, plain_mode=args.plain)
-
-    if shell_cmd:
-        window.new_tab(shell=shell_cmd)
+    window = MainWindow(cfg, plain_mode=args.plain, shell=shell_cmd)
 
     window.show()
 
