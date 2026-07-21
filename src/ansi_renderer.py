@@ -7,7 +7,7 @@ replays them into a ``QTextEdit`` with proper styling.
 
 from __future__ import annotations
 
-from ansi_parser import Span, SpanKind, SGRState, indexed_to_rgb
+from ansi_parser import SGRState, indexed_to_rgb
 from themes import Theme
 
 from PyQt6.QtGui import QTextCharFormat, QColor, QFont

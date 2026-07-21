@@ -9,10 +9,9 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QComboBox, QSpinBox, QLabel, QPushButton, QCheckBox,
+    QComboBox, QSpinBox, QPushButton, QCheckBox,
     QMessageBox,
 )
-from PyQt6.QtCore import Qt
 
 
 class SerialDialog(QDialog):

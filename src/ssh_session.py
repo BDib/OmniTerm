@@ -8,9 +8,7 @@ interactive shell sessions.
 
 from __future__ import annotations
 
-import threading
 import queue
-import time
 import logging
 
 log = logging.getLogger(__name__)

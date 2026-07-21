@@ -1,24 +1,19 @@
-import re
 
 from PyQt6.QtWidgets import (
-    QMainWindow, QTextEdit, QLineEdit, QApplication, QInputDialog,
-    QScrollBar, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
-    QMenuBar, QMenu, QFrame, QToolButton, QLabel, QMenu as QMenuWidget,
+    QMainWindow, QTextEdit, QApplication, QInputDialog,
+    QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
+    QFrame, QToolButton, QLabel, QMenu,
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QSettings, QPoint
 from PyQt6.QtGui import (
-    QColor,
     QTextCursor,
-    QFont,
     QKeySequence,
     QShortcut,
-    QTextCharFormat,
-    QPalette,
     QMouseEvent,
     QTextOption,
 )
 
-from themes import get_theme, list_themes, Theme
+from themes import get_theme, list_themes
 from ansi_parser import parse_ansi, SpanKind, strip_ansi
 from ansi_renderer import span_to_format
 from mouse_handler import MouseHandler
@@ -27,7 +22,6 @@ from ssh_dialog import SSHDialog
 from serial_dialog import SerialDialog
 from profile_picker import ProfilePickerDialog
 from wsl_manager import WSLManager
-from config import Config
 
 
 # ─── Cursor style mapping ─────────────────────────────────────────────────
@@ -563,7 +557,7 @@ class MainWindow(QMainWindow):
         self._cfg = cfg
         self._plain_mode = plain_mode
         self._settings = QSettings("OmniTerm", "OmniTerm")
-        self._tab_engines: dict[int, "TerminalEngine"] = {}
+        self._tab_engines: dict[int, "TerminalEngine"] = {}  # noqa: F821
 
         # Detect if running as admin
         self._is_admin = self._check_admin()

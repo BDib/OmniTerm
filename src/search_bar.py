@@ -6,8 +6,8 @@ Provides a Ctrl+F search bar that highlights matches in the terminal output.
 
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLineEdit, QLabel, QPushButton
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLineEdit, QLabel, QPushButton, QTextEdit
+from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtGui import QTextCursor, QTextCharFormat, QColor
 
 

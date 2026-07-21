@@ -10,9 +10,9 @@ _SRC_DIR = str(Path(__file__).resolve().parent)
 if _SRC_DIR not in sys.path:
     sys.path.insert(0, _SRC_DIR)
 
-from PyQt6.QtWidgets import QApplication
-from config import Config, VERSION
-from terminal_ui import MainWindow
+from PyQt6.QtWidgets import QApplication  # noqa: E402
+from config import Config, VERSION  # noqa: E402
+from terminal_ui import MainWindow  # noqa: E402
 
 # Enable fault handler to log segfaults — write next to the exe
 if getattr(sys, "frozen", False):

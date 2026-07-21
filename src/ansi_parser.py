@@ -17,7 +17,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Iterator
 
 
 # ─── Span: a run of styled or control text ─────────────────────────────────
