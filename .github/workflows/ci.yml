@@ -81,7 +81,8 @@ jobs:
       run: choco install innosetup -y --no-progress
 
     - name: Build installer
-      run: & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\omniterm.iss
+      run: |
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\omniterm.iss
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
