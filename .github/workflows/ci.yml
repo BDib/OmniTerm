@@ -36,6 +36,7 @@ jobs:
 
     - name: Run tests
       run: python tests/run_all.py
+      timeout-minutes: 5
 
     - name: Build (PyInstaller check)
       if: matrix.python-version == '3.12'
