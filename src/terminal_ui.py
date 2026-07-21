@@ -74,6 +74,10 @@ class TerminalWidget(QWidget):
         self._output.setWordWrapMode(QTextOption.WrapMode.WordWrap)
         layout.addWidget(self._output, 1)
 
+        # ── Search bar (hidden by default, shown on Ctrl+F / F3) ──
+        self._search_bar = SearchBar(self._output)
+        self._search_bar.hide()
+
         # Separator line
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
@@ -277,6 +281,30 @@ class TerminalWidget(QWidget):
     def _setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+Shift+O"), self).activated.connect(
             self._toggle_opacity)
+        # Search shortcuts
+        QShortcut(QKeySequence("F3"), self).activated.connect(
+            self._search_next)
+        QShortcut(QKeySequence("Shift+F3"), self).activated.connect(
+            self._search_prev)
+
+    def _search_next(self):
+        """F3: Open search bar or find next."""
+        widget = self._tabs.currentWidget()
+        if isinstance(widget, TerminalWidget):
+            if widget._search_bar.isVisible():
+                widget._search_bar.find_next()
+            else:
+                self._open_search()
+
+    def _search_prev(self):
+        """Shift+F3: Find previous."""
+        widget = self._tabs.currentWidget()
+        if isinstance(widget, TerminalWidget):
+            if widget._search_bar.isVisible():
+                widget._search_bar.find_prev()
+            else:
+                self._open_search()
+                widget._search_bar.find_prev()
 
     # ── Opacity ────────────────────────────────────────────────────────
 
@@ -586,10 +614,6 @@ class MainWindow(QMainWindow):
         # ── Menu bar ──
         self._build_menu_bar()
 
-        # ── Search bar ──
-        self._search_bar = SearchBar(self)
-        self._search_bar.hide()
-
         # ── Built-in shortcuts ──
         # Note: Most shortcuts are defined in _build_menu_bar() via setShortcut().
         # Only shortcuts NOT in the menu bar are defined here as standalone QShortcuts.
@@ -869,11 +893,11 @@ class MainWindow(QMainWindow):
     # ── Actions ────────────────────────────────────────────────────────
 
     def _open_search(self) -> None:
-        """Open the search bar and attach it to the current terminal."""
+        """Open the search bar and attach it to the current terminal's output."""
         widget = self._tabs.currentWidget()
         if isinstance(widget, TerminalWidget):
-            self._search_bar.attach(widget)
-            self._search_bar.open_bar()
+            widget._search_bar.attach(widget._output)
+            widget._search_bar.open_bar()
 
     def _profile_picker(self) -> None:
         """Open the profile picker dialog and launch the selected shell."""

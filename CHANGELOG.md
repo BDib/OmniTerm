@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.5.0 — Session 5 (2026-07-21)
+
+### Search / Find
+- **F3** opens search bar or finds next match
+- **Shift+F3** finds previous match
+- Search bar now lives inside each TerminalWidget (positioned at bottom of output)
+- All matches highlighted with blue background
+- Match counter shows current/total (e.g., "3/15")
+- Enter in search field finds next, Escape or close button hides bar
+
+### Documentation
+- **KNOWN_ISSUES.md** — Known limitations and platform issues
+- **CONTRIBUTING.md** — How to contribute, project structure, building
+- **BUILD.md** — Detailed build instructions (Nuitka, PyInstaller, installer)
+- Updated CHANGELOG.md, Roadmap.md, README.md
+
+### Menu Cleanup
+- Removed duplicate shortcuts between TerminalWidget and MainWindow
+- All menu items verified working: File, Edit, View, Tools, Window
+
+---
+
 ## v1.4.0 — Session 5 (2026-07-21)
 
 ### Build & Distribution
