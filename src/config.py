@@ -42,7 +42,13 @@ def _default_config_path() -> Path:
 
     # Next to the executable or script
     if getattr(sys, "frozen", False):
-        # Nuitka onefile extracts to a temp dir; use exe's own directory
+        # For onefile builds, the exe is extracted to a temp dir.
+        # Look for settings.toml in the CWD first (where user ran the exe from),
+        # then next to the exe, then in %APPDATA%.
+        cwd = Path(os.getcwd())
+        candidate = cwd / "settings.toml"
+        if candidate.is_file():
+            return candidate
         base = Path(sys.executable).parent
     else:
         base = Path(__file__).resolve().parent.parent  # src/ → project root
@@ -58,7 +64,8 @@ def _default_config_path() -> Path:
 
     # Not found — return path next to exe so it gets created on first run
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent / "settings.toml"
+        # For onefile builds, save next to the original exe (CWD), not the temp dir
+        return Path(os.getcwd()) / "settings.toml"
     return base / "settings.toml"
 
 
@@ -131,6 +138,7 @@ class Config:
         if not path.is_file():
             # Create settings.toml with defaults next to the executable
             try:
+                path.parent.mkdir(parents=True, exist_ok=True)
                 cfg.save(path)
             except Exception:
                 pass  # non-critical — defaults still work
