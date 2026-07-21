@@ -1,40 +1,52 @@
-# OmniTerm
+# OmniTerm .gitignore
 
-# Python
+# ── Python ──
 __pycache__/
 *.py[cod]
 *$py.class
 *.egg-info/
+*.pyc
 
-# Virtual environments
+# ── Virtual environments ──
 .venv/
 venv/
 ENV/
 
-# IDE
+# ── IDE ──
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-workspace
 
-# OS
+# ── OS ──
 Thumbs.db
 Desktop.ini
 .DS_Store
 
-# Build output
+# ── Build output (executables, DLLs, packages) ──
 build/
 dist/
 dist_nuitka/
 OUT/
+output/
+installer_output/
 
-# PyInstaller generated (keep OmniTerm.spec tracked)
+# ── PyInstaller generated (keep OmniTerm.spec tracked) ──
 *.spec.bak
 *.manifest
 
-# Nuitka
+# ── Nuitka ──
 nuitka-crash-report.xml
+*.ilk
+*.pdb
+*.obj
+*.exp
+*.lib
 
-# Logs
+# ── Temp ──
+C:\Temp\nbuild/
+
+# ── Logs & runtime ──
 *.log
 errors.txt
