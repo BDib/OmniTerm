@@ -50,3 +50,4 @@ C:\Temp\nbuild/
 # ── Logs & runtime ──
 *.log
 errors.txt
+test/
