@@ -31,7 +31,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
-SetupIconFile=..\dist\OmniTerm.exe
+;SetupIconFile=..\dist\OmniTerm.exe
 UninstallDisplayIcon={app}\{#MyAppExeName}
 LicenseFile=..\LICENSE
 
