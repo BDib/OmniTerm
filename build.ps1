@@ -1,14 +1,15 @@
 # OmniTerm Build Script (PowerShell)
-# Builds a standalone Windows .exe using PyInstaller or Nuitka.
+# Builds a standalone Windows .exe using Nuitka (default) or PyInstaller.
 #
 # Usage:
-#   .\build.ps1              — Build with PyInstaller (release mode)
-#   .\build.ps1 nuitka       — Build with Nuitka (faster startup)
-#   .\build.ps1 debug        — Build in debug mode (console visible)
+#   .\build.ps1              — Build with Nuitka (default, fastest startup)
+#   .\build.ps1 pyinstaller  — Build with PyInstaller (fallback)
+#   .\build.ps1 debug        — Nuitka debug build
+#   .\build.ps1 installer    — Build Nuitka + create Inno Setup installer
 #   .\build.ps1 clean        — Remove build artifacts
 
 param(
-    [ValidateSet("release", "debug", "clean", "nuitka", "nuitka-debug")]
+    [ValidateSet("release", "debug", "clean", "pyinstaller", "pyinstaller-debug", "installer")]
     [string]$Mode = "release"
 )
 
@@ -27,7 +28,9 @@ if ($Mode -eq "clean") {
     Write-Host "Cleaning build artifacts..."
     if (Test-Path build) { Remove-Item -Recurse -Force build }
     if (Test-Path dist) { Remove-Item -Recurse -Force dist }
+    if (Test-Path dist_nuitka) { Remove-Item -Recurse -Force dist_nuitka }
     if (Test-Path output) { Remove-Item -Recurse -Force output }
+    if (Test-Path installer_output) { Remove-Item -Recurse -Force installer_output }
     Write-Host "Done."
     exit 0
 }
@@ -44,15 +47,16 @@ python -c "import sys; sys.path.insert(0,'src'); from config import VERSION; pri
 Write-Host "Installing dependencies..."
 python -m pip install -r requirements.txt --quiet
 
-if ($Mode -like "nuitka*") {
-    # ── Nuitka Build ──
+function Build-Nuitka {
+    param([bool]$DebugMode = $false)
+
     python -c "import nuitka" 2>$null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Nuitka not found. Installing..."
         python -m pip install nuitka --quiet
     }
 
-    # Nuitka's Scons backend fails with spaces in temp paths — fix it
+    # Fix Scons temp path bug (spaces in path break the linker)
     $nbuildTemp = "C:\Temp\nbuild"
     New-Item -ItemType Directory -Force -Path $nbuildTemp | Out-Null
     $oldTemp = $env:TEMP; $oldTmp = $env:TMP
@@ -73,12 +77,11 @@ if ($Mode -like "nuitka*") {
         "src/Main.py"
     )
 
-    if ($Mode -eq "nuitka-debug") {
+    if ($DebugMode) {
         $nuitka_args += "--debug"
     }
 
     Write-Host "Building with Nuitka (standalone)..."
-    Write-Host "First run compiles C code — may take several minutes."
     python -m nuitka @nuitka_args
 
     # Restore temp
@@ -86,35 +89,83 @@ if ($Mode -like "nuitka*") {
 
     # Copy output to dist
     if (Test-Path "dist_nuitka\Main.dist\OmniTerm.exe") {
-        Copy-Item "dist_nuitka\Main.dist\OmniTerm.exe" "dist\OmniTerm.exe" -Force
-        Write-Host "Copied to dist\OmniTerm.exe"
+        if (-not (Test-Path dist)) { New-Item -ItemType Directory -Path dist | Out-Null }
+        # Copy entire dist folder (DLLs, Qt plugins, settings.toml)
+        Copy-Item "dist_nuitka\Main.dist\*" "dist\" -Recurse -Force
+        Write-Host "Copied Nuitka build to dist\"
     }
+}
 
-} else {
-    # ── PyInstaller Build ──
+function Build-PyInstaller {
+    param([bool]$DebugMode = $false)
+
     python -c "import PyInstaller" 2>$null
     if ($LASTEXITCODE -ne 0) {
         Write-Host "PyInstaller not found. Installing..."
         python -m pip install pyinstaller
     }
 
-    if ($Mode -eq "debug") {
-        Write-Host "Building in DEBUG mode (console visible)..."
+    if ($DebugMode) {
+        Write-Host "Building with PyInstaller (DEBUG mode)..."
         python -m PyInstaller OmniTerm.spec --noconfirm --console
     } else {
-        Write-Host "Building in RELEASE mode..."
+        Write-Host "Building with PyInstaller (RELEASE mode)..."
         python -m PyInstaller OmniTerm.spec --noconfirm
     }
 }
 
+# ── Build ──
+switch ($Mode) {
+    "pyinstaller"       { Build-PyInstaller -DebugMode $false }
+    "pyinstaller-debug"{ Build-PyInstaller -DebugMode $true }
+    "debug"            { Build-Nuitka -DebugMode $true }
+    default             { Build-Nuitka -DebugMode $false }
+}
+
+# ── Installer ──
+if ($Mode -eq "installer") {
+    Write-Host ""
+    Write-Host "Creating installer with Inno Setup..."
+
+    # Find Inno Setup compiler
+    $iscc = $null
+    $candidates = @(
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+        "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+        "${env:ProgramFiles(x86)}\Inno Setup 5\ISCC.exe",
+        "$env:ProgramFiles\Inno Setup 5\ISCC.exe"
+    )
+    foreach ($c in $candidates) {
+        if (Test-Path $c) { $iscc = $c; break }
+    }
+
+    if (-not $iscc) {
+        Write-Host "Inno Setup not found. Install from https://jrsoftware.org/isinfo.php" -ForegroundColor Yellow
+        Write-Host "Skipping installer creation."
+    } else {
+        & $iscc installer\omniterm.iss
+        if ($LASTEXITCODE -eq 0) {
+            $setup = Get-Item installer_output\OmniTermSetup.exe -ErrorAction SilentlyContinue
+            if ($setup) {
+                Write-Host "Installer: $([math]::Round($setup.Length / 1MB, 1)) MB"
+            }
+        }
+    }
+}
+
+# ── Result ──
 Write-Host ""
-if ($LASTEXITCODE -eq 0) {
+if ($LASTEXITCODE -eq 0 -or $Mode -eq "installer") {
     $exe = Get-Item dist\OmniTerm.exe -ErrorAction SilentlyContinue
     Write-Host "============================================"
     Write-Host "  BUILD SUCCESSFUL"
     Write-Host "  Output: dist\OmniTerm.exe"
     if ($exe) {
         Write-Host "  Size:   $([math]::Round($exe.Length / 1MB, 1)) MB"
+    }
+    $setup = Get-Item installer_output\OmniTermSetup.exe -ErrorAction SilentlyContinue
+    if ($setup) {
+        Write-Host "  Installer: installer_output\OmniTermSetup.exe ($([math]::Round($setup.Length / 1MB, 1)) MB)"
     }
     Write-Host "============================================"
 } else {

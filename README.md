@@ -29,7 +29,9 @@ OmniTerm provides a clean, modern GUI wrapper around the Windows Pseudo Console 
 - **Window Persistence** — Remembers position and size across launches
 - **Cursor Styles** — Configurable bar, block, or underline cursor
 - **Transparency Toggle** — `Ctrl+Shift+O` toggles opacity
-- **PyInstaller Ready** — Build standalone `.exe` with `build.bat` or `.\build.ps1`
+- **Nuitka Build** — Default build method, 7.5x faster startup (13ms), 2.3x smaller (18.9 MB)
+- **PyInstaller Fallback** — Available via `.\build.ps1 pyinstaller`
+- **Inno Setup Installer** — Professional Windows installer with Start Menu, desktop shortcuts
 - **CI/CD Pipeline** — GitHub Actions tests on Python 3.10–3.13
 - **CLI Arguments** — `--shell`, `--profile`, `--plain`, `--config`, `--version`
 
@@ -59,9 +61,11 @@ OmniTerm/
 │   ├── terminal_ui.py       # PyQt6 UI — TerminalWidget, tabs, menus
 │   └── __init__.py
 ├── tests/                   # 11 test suites, 100+ tests
+├── installer/               # Inno Setup installer script
+│   └── omniterm.iss
 ├── settings.toml            # User configuration
-├── OmniTerm.spec            # PyInstaller spec
-├── build.bat / build.ps1    # Build scripts
+├── OmniTerm.spec            # PyInstaller spec (fallback)
+├── build.bat / build.ps1    # Build scripts (Nuitka default)
 ├── CHANGELOG.md             # Version history
 ├── LICENSE                  # MIT License
 └── .github/workflows/ci.yml # CI/CD pipeline
@@ -133,27 +137,42 @@ python Main.py
 
 ### Building a Standalone `.exe`
 
-OmniTerm can be packaged into a single Windows executable using PyInstaller:
+OmniTerm uses **Nuitka** (default) for fastest startup times, with **PyInstaller** as a fallback:
 
 ```bash
-# Quick build (double-click build.bat)
-build.bat
-
-# Or with PowerShell
+# Nuitka build (default — 13ms startup, 18.9 MB)
 .\build.ps1
 
-# Or manually
-pip install pyinstaller
-pyinstaller OmniTerm.spec --noconfirm
+# PyInstaller build (fallback — 97ms startup, 43.8 MB)
+.\build.ps1 pyinstaller
+
+# Create Inno Setup installer
+.\build.ps1 installer
+
+# Debug build (console visible)
+.\build.ps1 debug
+
+# Clean artifacts
+.\build.ps1 clean
 ```
 
-The output will be at `dist/OmniTerm.exe`. This is a self-contained executable that does not require Python to be installed on the target machine.
+The output will be at `dist/OmniTerm.exe`. Nuitka compiles Python to C for near-instant startup.
+
+### Creating an Installer
+
+The project includes an Inno Setup script for creating a professional Windows installer:
 
 ```bash
-# Debug build (console visible for troubleshooting)
-build.bat debug
-.\build.ps1 debug
+# Build + create installer (requires Inno Setup 6)
+.\build.ps1 installer
 ```
+
+The installer (`installer_output/OmniTermSetup.exe`) includes:
+- Installation to Program Files
+- Start Menu and desktop shortcuts
+- Optional .toml file association
+- Uninstaller
+- Post-install launch option
 
 ### Dependencies
 

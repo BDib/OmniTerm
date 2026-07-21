@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.3.0 — Session 4 (2026-07-20)
+
+### Build System
+- **Nuitka as default** — 7.5x faster startup (13ms vs 97ms), 2.3x smaller (18.9 MB vs 43.8 MB)
+- **PyInstaller retained** as fallback via `.\build.ps1 pyinstaller`
+- **Inno Setup installer** — Professional Windows installer with Start Menu, desktop shortcut, file associations
+- **Build modes**: `release` (Nuitka default), `pyinstaller`, `debug`, `installer`, `clean`
+
+### Installer
+- `installer/omniterm.iss` — Inno Setup script
+- Installs to Program Files, creates Start Menu and desktop shortcuts
+- Optional .toml file association
+- Post-install launch option
+- Built via `.\build.ps1 installer`
+
+### Admin & Profiles
+- **Per-tab admin indicator** — `[Admin]` badge on tab title when elevated
+- **Profile Picker** now handles admin profiles (triggers UAC)
+- **Profile Picker dialog** shows `[Admin]` badge
+- **Window title** no longer shows `[Administrator]` — indicator is per-tab
+- **Fixed duplicate tab** on admin launch (MainWindow accepts shell param)
+- **Removed info dialog** before UAC prompt (UAC is sufficient)
+
+### UI Improvements
+- **Dynamic path label** — shows current working directory from shell prompt
+- **Auto-expanding input** — grows from 28px to 120px as content increases
+- **13 themes** — Monokai, Dracula, Nord, GitHub Dark, Catppuccin Mocha, etc.
+
+### Docs
+- Updated README.md, CHANGELOG.md, Roadmap.md for v1.3.0
+
+---
+
 ## v1.2.0 — Session 3 (2026-07-20)
 
 ### Input Widget Redesign
