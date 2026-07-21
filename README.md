@@ -2,42 +2,36 @@
 
 A lightweight, extensible Windows terminal emulator built with Python, PyQt6, and `winpty`.
 
-OmniTerm provides a clean, modern GUI wrapper around the Windows Pseudo Console (ConPTY) via `winpty`, giving you a fast terminal experience with full ANSI color rendering, dark themes, multi-tab support, SSH/Serial/WSL integration, and a thread-safe architecture.
+OmniTerm provides a clean, modern GUI wrapper around the Windows Pseudo Console via `winpty`, giving you a fast terminal experience with full ANSI color rendering, dark themes, multi-tab support, SSH/Serial/WSL integration, and a thread-safe architecture.
 
 ---
 
 ## Features
 
-- **Pseudo Console Backend** — Uses `winpty` to spawn and manage real shell processes (`cmd.exe`, PowerShell, WSL, etc.) with full PTY support.
-- **Full ANSI Color Rendering** — Complete SGR parser with 256-color and true-color (RGB) support, bold, italic, underline, inverse, and strikethrough.
-- **3 Built-in Themes** — Campbell (default), Solarized Dark, and One Half Dark with `Ctrl+,` theme picker.
-- **Dark Terminal Theme** — Campbell-inspired dark UI with `Cascadia Code` / `Consolas` monospace font.
-- **Cursor Movement** — Handles `\x1b[A/B/C/D` (up/down/forward/back), `\x1b[H` (home), `\x1b[J` (clear screen), `\x1b[K` (clear line).
-- **--plain Mode** — Strip all ANSI escapes for environments where color rendering isn't needed.
-- **Thread-Safe I/O** — Dedicated reader and writer threads prevent blocking the GUI while communicating with the shell.
-- **Configuration via TOML** — Simple `settings.toml` file for font, theme, opacity, cursor, and RTL behavior tuning.
-- **RTL-Ready Architecture** — Built-in hooks for Arabic/Hebrew bidirectional text alignment.
-- **Mouse Support** — xterm-compatible mouse tracking (`\x1b[?1000h`), click/scroll/hold encode to `\x1b[M` sequences.
-- **Scroll Buffer** — Ring-buffer stores last 10,000 lines of styled output; scroll up/down to browse history.
-- **Multi-Tab Interface** — `Ctrl+T` new tab, `Ctrl+W` close tab, `Ctrl+Tab` cycle tabs. Closable, movable tabs.
-- **Split Panes** — `Ctrl+Shift+D` horizontal split, `Ctrl+Shift+\` vertical split. Each pane is an independent terminal.
-- **Tab Titles** — Auto-derived from shell name (cmd, powershell, bash, etc.).
-- **SSH Sessions** — `Ctrl+Shift+S` opens an SSH dialog for connecting to remote hosts with password or key-based auth.
-- **Serial Console** — `Ctrl+Shift+R` opens a serial dialog for COM port connections (embedded/hardware work). Auto-detects available ports, configurable baud rate/parity/stop bits.
-- **WSL Integration** — `Ctrl+Shift+U` auto-detects WSL distributions and opens a picker dialog. Each distribution opens in its own tab.
-- **Named Profiles** — Define shell profiles in `settings.toml` (cmd, PowerShell, WSL, Git Bash) with `Ctrl+Shift+N` profile picker.
-- **Custom Keybindings** — Remap shortcuts to built-in actions via `settings.toml`.
-- **Find / Search** — `Ctrl+F` opens a search bar with match highlighting and navigation.
-- **Copy & Paste** — `Ctrl+C` / `Ctrl+V` for clipboard integration.
-- **Arrow Keys & Shortcuts** — Full arrow key, Home/End, Page Up/Down, and Ctrl combinations.
-- **Exit Detection** — Displays `[Process exited]` when the shell terminates.
-- **Window Persistence** — Remembers window position and size across launches.
-- **Font Shortcuts** — `Ctrl+=` / `Ctrl+-` to resize, `Ctrl+0` to reset, `Ctrl+Shift+T` to cycle themes.
-- **Cursor Styles** — Configurable bar, block, or underline cursor with optional blinking.
-- **Transparency Toggle** — `Ctrl+Shift+O` toggles between opaque and configured transparency.
-- **PyInstaller Ready** — Build a standalone `.exe` with `build.bat` (cmd) or `.\build.ps1` (PowerShell).
-- **CI/CD Pipeline** — GitHub Actions runs tests on Python 3.10–3.13, builds and attaches `.exe` to releases on tag push.
-- **CLI Arguments** — `--shell`, `--profile`, `--plain`, `--config`, `--version`.
+- **Dual-Pane Terminal** — Separate output display (QTextEdit) and input editor (QTextEdit) with native cursor and editing
+- **Full ANSI Color Rendering** — Complete SGR parser with 256-color and true-color (RGB) support, bold, italic, underline, inverse, strikethrough
+- **13 Built-in Themes** — Campbell, Solarized Dark, One Half Dark, Monokai, Dracula, Nord, GitHub Dark, Catppuccin Mocha, Tomorrow Night, Gruvbox Dark, Tokyo Night, Rosé Pine, Zenburn
+- **Command History** — Up/Down arrows in the input field cycle through previously entered commands
+- **Native Input Editing** — Left/Right/Home/End/Delete/Backspace all work via QTextEdit's built-in handling
+- **Profile Management** — Add, edit, duplicate, delete shell profiles with a table-based UI (File → Manage Profiles)
+- **Run As Admin** — Each profile supports admin mode; triggers UAC and relaunches OmniTerm elevated
+- **"+" Tab Button** — Corner widget with dropdown listing all profiles for quick tab creation
+- **ERASE_DISPLAY** — `cls`/`clear`/`Clear-Host` properly clears the output widget
+- **CURSOR_POS Handling** — Handles PSReadLine rewrites (cursor movement + overwrite for PowerShell)
+- **Multi-Tab Interface** — `Ctrl+T` new tab, `Ctrl+W` close tab, `Ctrl+Tab` cycle tabs
+- **SSH Sessions** — `Ctrl+Shift+S` for remote hosts with password or key-based auth
+- **Serial Console** — `Ctrl+Shift+R` for COM port connections
+- **WSL Integration** — `Ctrl+Shift+U` auto-detects distributions, UTF-16LE decoding fixed
+- **Mouse Support** — xterm-compatible mouse tracking
+- **Find / Search** — `Ctrl+F` opens a search bar
+- **Copy & Paste** — `Ctrl+C` / `Ctrl+V` for clipboard integration
+- **RTL Support** — Toggle window and line RTL direction
+- **Window Persistence** — Remembers position and size across launches
+- **Cursor Styles** — Configurable bar, block, or underline cursor
+- **Transparency Toggle** — `Ctrl+Shift+O` toggles opacity
+- **PyInstaller Ready** — Build standalone `.exe` with `build.bat` or `.\build.ps1`
+- **CI/CD Pipeline** — GitHub Actions tests on Python 3.10–3.13
+- **CLI Arguments** — `--shell`, `--profile`, `--plain`, `--config`, `--version`
 
 ---
 
@@ -45,46 +39,32 @@ OmniTerm provides a clean, modern GUI wrapper around the Windows Pseudo Console 
 
 ```
 OmniTerm/
-├── Main.py              # Application entry point — CLI args, profile/shell selection
-├── config.py            # Configuration loader — profiles, keybindings, settings
-├── themes.py            # Built-in themes — Campbell, Solarized Dark, One Half Dark
-├── ansi_parser.py       # ANSI escape sequence parser (SGR, cursor, erase, OSC)
-├── ansi_renderer.py     # Maps parsed spans → QTextCharFormat for styled rendering
-├── mouse_handler.py     # xterm mouse protocol encoder (click/scroll/drag)
-├── scroll_buffer.py     # Ring-buffer of styled lines with viewport tracking
-├── search_bar.py        # Ctrl+F search bar with match highlighting
-├── ssh_session.py       # SSH connection manager (paramiko wrapper)
-├── ssh_dialog.py        # SSH connection dialog (host/port/user/pass/key)
-├── serial_session.py    # Serial port connection manager (pyserial wrapper)
-├── serial_dialog.py     # Serial connection dialog (port/baud/parity/stopbits)
-├── wsl_manager.py       # WSL distribution detection and management
-├── profile_picker.py    # Shell profile picker dialog
-├── terminal_core.py     # TerminalEngine — local PTY + SSH + serial session management
-├── terminal_ui.py       # PyQt6 UI — TerminalWidget, tabs, splits, shortcuts, mouse
-├── settings.toml        # User configuration (profiles, keybindings, theme, cursor)
-├── requirements.txt     # Python dependencies (PyQt6, paramiko, pyserial, pywinpty)
-├── OmniTerm.spec        # PyInstaller spec — standalone .exe build
-├── build.bat            # Build script (cmd) — one-click packaging (release/debug/clean)
-├── build.ps1            # Build script (PowerShell) — same as build.bat for PS users
-├── LICENSE              # MIT License
-├── .gitignore           # Python/IDE/build ignores
-├── .github/
-│   └── workflows/
-│       └── ci.yml       # GitHub Actions: test (3.10–3.13), lint, build, release
-└── tests/
-    ├── __init__.py
-    ├── run_all.py           # Test runner (9 suites)
-    ├── test_config.py       # Config loading tests (6 tests)
-    ├── test_themes.py       # Theme system tests (8 tests)
-    ├── test_ansi_parser.py  # ANSI parser tests (27 tests)
-    ├── test_mouse_scroll.py # Mouse handler + scroll buffer tests (27 tests)
-    ├── test_tabs.py         # Tab/split logic tests (6 tests)
-    ├── test_profiles.py     # Profile/keybinding tests (12 tests)
-    ├── test_distribution.py # CLI args, spec, CI workflow tests (11 tests)
-    ├── test_ssh.py          # SSH session + dialog tests (9 tests)
-    ├── test_serial_wsl.py   # Serial + WSL tests (15 tests)
-    ├── nudge_test.py        # Diagnostic: PTY line endings (CRLF/CR)
-    └── test_pty.py          # Diagnostic: full PTY spawn test
+├── src/
+│   ├── Main.py              # Application entry point
+│   ├── config.py            # Configuration loader (profiles, keybindings, settings)
+│   ├── themes.py            # 13 built-in themes
+│   ├── ansi_parser.py       # ANSI escape sequence parser
+│   ├── ansi_renderer.py     # Maps parsed spans → QTextCharFormat
+│   ├── mouse_handler.py     # xterm mouse protocol encoder
+│   ├── scroll_buffer.py     # Ring-buffer of styled lines
+│   ├── search_bar.py        # Ctrl+F search bar
+│   ├── ssh_session.py       # SSH connection manager
+│   ├── ssh_dialog.py        # SSH connection dialog
+│   ├── serial_session.py    # Serial port manager
+│   ├── serial_dialog.py     # Serial connection dialog
+│   ├── wsl_manager.py       # WSL distribution detection
+│   ├── profile_picker.py    # Shell profile picker dialog
+│   ├── profile_manager.py   # Profile management UI (add/edit/delete)
+│   ├── terminal_core.py     # TerminalEngine — PTY + SSH + serial sessions
+│   ├── terminal_ui.py       # PyQt6 UI — TerminalWidget, tabs, menus
+│   └── __init__.py
+├── tests/                   # 11 test suites, 100+ tests
+├── settings.toml            # User configuration
+├── OmniTerm.spec            # PyInstaller spec
+├── build.bat / build.ps1    # Build scripts
+├── CHANGELOG.md             # Version history
+├── LICENSE                  # MIT License
+└── .github/workflows/ci.yml # CI/CD pipeline
 ```
 
 ---

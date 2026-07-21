@@ -1,82 +1,62 @@
 # Changelog
 
+## v1.2.0 — Session 3 (2026-07-20)
+
+### Input Widget Redesign
+- **Replaced QLineEdit with QTextEdit** for the input area — supports word wrap, multi-line display, and dynamic expansion for long commands
+- **Path label** — "PS> " or "cmd> " indicator at the left of the input area shows current shell
+- **Enter sends command**, Shift+Enter for newlines, Tab changes focus
+- **Dynamic input height** — input area expands up to 120px for long lines, word wraps at widget width
+
+### Themes
+- **13 built-in themes** (up from 3): Added Monokai, Dracula, Nord, GitHub Dark, Catppuccin Mocha, Tomorrow Night, Gruvbox Dark, Tokyo Night, Rosé Pine, Zenburn
+
+### Profile Management
+- **Profile Management UI** — Table-based dialog for add/edit/duplicate/delete profiles (File → Manage Profiles, or + dropdown)
+- **Run As Admin** — Each profile has an admin flag; triggers UAC via ShellExecuteW with "runas" verb
+- **Edit Dialog** — Form-based editor for Name, Command, Arguments, Working Dir, Admin checkbox
+- **Config persistence** — `Config.save()` writes profiles back to `settings.toml`
+- **Default admin profiles** — `cmd_admin`, `powershell_admin` in settings.toml
+- **Removed git_bash** from default profiles
+
+### UI Improvements
+- **"+" tab button** — Corner widget with dropdown listing all profiles, "Manage Profiles..." at bottom
+- **RTL toggle** — Now propagates to both output QTextEdit and input QTextEdit
+- **Word wrap** — Both output and input areas word-wrap at widget width
+
+### Fixes
+- **PowerShell doubled text** — CURSOR_POS handling for PSReadLine rewrites; `-NoProfile` flag
+- **WSL encoding** — `wsl --list --verbose` UTF-16LE decoding fixed
+- **Profile manager import error** — Missing QWidget import fixed
+
+### Removed
+- **Split panes** — Removed (didn't work with QWidget-based terminal)
+
+---
+
 ## v1.1.0 — Session 2 (2026-07-20)
 
 ### Architecture
-- **Rewrote TerminalWidget** from a single `QTextEdit` to a `QWidget` with separate `QTextEdit` (output) + `QLineEdit` (input)
-  - Output area: read-only QTextEdit renders shell output with ANSI colors
-  - Input area: QLineEdit provides native cursor, editing, and history
-  - Solved fundamental QTextEdit limitations (hidden cursor when read-only, inability to overwrite text, internal key handling fighting overrides)
-
-### Input Handling
-- **Command history**: Up/Down arrows in the input field cycle through previously entered commands
-- **Native editing**: Left/Right arrows, Home/End, Delete, Backspace all work via QLineEdit's built-in handling
-- **Enter**: sends command + `\r` to the shell; shell echoes output back to the output area
-
-### Output Rendering
-- **ANSI parser**: Handles SGR (colors, bold, italic, underline), cursor movement, erase sequences
-- **ANSI renderer**: Maps parsed spans to `QTextCharFormat` for styled output
-- **ERASE_DISPLAY** (`cls`/`clear`/`Clear-Host`): Now properly clears the output widget
-- **ERASE_LINE** (`\x1b[K`): Clears from cursor to end of line
-- **Carriage return**: Ignored for `\r\n` line endings (avoids blank lines and text duplication)
-- **CURSOR_POS handling**: Handles PSReadLine rewrites — when cursor moves backward within a line, old text is deleted before inserting new text (fixes doubled characters in PowerShell)
-- **CURSOR_BACK / CURSOR_FORWARD**: Handled for cursor movement sequences
+- **Rewrote TerminalWidget** from single QTextEdit to QWidget with QTextEdit (output) + QLineEdit (input)
+- Moved all source files to `src/` directory
 
 ### Key Fixes
-- **Delete key**: Now handled natively by QLineEdit (no longer inserts tab/space)
-- **Left/Right arrows**: Work natively in QLineEdit
-- **Backspace**: Sends `\x7f` (DEL) instead of `\b` (BS) — what most shells expect
-- **`cls`/`clear`**: ERASE_DISPLAY span now clears the output widget
-- **`exit` command**: Closes the tab; last tab closes the application
-- **`pause` support**: All keystrokes forwarded to shell via QLineEdit → Enter flow
-- **Doubled text**: Eliminated by using QLineEdit instead of forwarding keystrokes to shell
-- **PowerShell doubled text**: Fixed by adding `-NoProfile` to disable PSReadLine, and by handling CURSOR_POS for line rewrites
-
-### UI Improvements
-- **"+" tab button**: Corner widget with dropdown menu listing all profiles — click to open a new tab with that profile, or open Profile Picker
-- **RTL toggle**: Now propagates to both output QTextEdit and input QLineEdit
-- **WSL encoding fix**: `wsl --list --verbose` outputs UTF-16LE — now decoded correctly
-
-### Removed
-- **Split panes**: Removed horizontal/vertical split functionality (didn't work as expected with the QWidget-based terminal)
-- **Git Bash profile**: Removed from default profiles
-
-### Profile Management
-- **"Manage Profiles" dialog**: Edit, add, duplicate, and delete profiles with a table-based UI (File → Manage Profiles)
-- **Run As Admin**: Each profile has an admin flag; admin profiles launch elevated via ShellExecuteW with pipe-based I/O
-- **"+" dropdown**: Shows all profiles with Admin badges; "Manage Profiles..." at the bottom
-- **Config persistence**: Profiles save back to `settings.toml` via `Config.save()`
-- **Admin profiles added**: `cmd_admin`, `powershell_admin` in default settings.toml
-
-### Project Structure
-- Moved all Python source files to `src/` directory
-- Added `src/__init__.py`
-- Updated all imports, test paths, build scripts, spec file, and CI workflow
-- `settings.toml` remains at project root (config.py looks one directory up)
+- Delete key, arrow keys, backspace all work correctly
+- cls/clear/Clear-Host via ERASE_DISPLAY
+- Exit command closes tab; last tab closes app
+- PowerShell doubled text eliminated
 
 ### Tests
-- **11 test suites, 100+ tests** all passing
-- Added `test_keyboard.py`: 21 tests for input handling (QLineEdit-based)
-- Added `test_rendering.py`: 7 tests for ANSI rendering pipeline
-- Updated `test_distribution.py` for new `src/Main.py` entry point
-- Updated `tests/run_all.py` to include new test modules
-
-### Build
-- Updated `OmniTerm.spec` entry point to `src/Main.py`
-- Updated `build.bat` and `build.ps1` to find `config.VERSION` via `src/`
-- Updated CI workflow lint path from `*.py` to `src/`
+- 11 test suites, 100+ tests all passing
 
 ---
 
 ## v1.0.0 — Session 1 (2026-07-20)
 
-### Initial features
+### Initial release
 - Multi-tab terminal with PTY (winpty), SSH, and serial support
 - ANSI color rendering (256-color, RGB, bold, italic, underline)
 - Mouse protocol support (xterm)
-- Theme system (Campbell, Solarized Dark, One Half Dark)
-- Configurable via `settings.toml`
-- Profile picker (cmd, PowerShell, pwsh, WSL, Git Bash)
-- Split panes (horizontal/vertical)
-- Search bar
-- Font size controls, opacity toggle
+- Theme system, configuration via TOML
+- Profile picker, split panes, search bar
+- Font size controls, opacity toggle, RTL support

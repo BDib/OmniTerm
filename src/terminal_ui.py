@@ -2,8 +2,8 @@ import re
 
 from PyQt6.QtWidgets import (
     QMainWindow, QTextEdit, QLineEdit, QApplication, QInputDialog,
-    QScrollBar, QWidget, QVBoxLayout, QTabWidget,
-    QMenuBar, QMenu, QFrame, QToolButton, QMenu as QMenuWidget,
+    QScrollBar, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
+    QMenuBar, QMenu, QFrame, QToolButton, QLabel, QMenu as QMenuWidget,
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QSettings, QPoint
 from PyQt6.QtGui import (
@@ -15,6 +15,7 @@ from PyQt6.QtGui import (
     QTextCharFormat,
     QPalette,
     QMouseEvent,
+    QTextOption,
 )
 
 from themes import get_theme, list_themes, Theme
@@ -72,6 +73,7 @@ class TerminalWidget(QWidget):
         self._output.setAcceptRichText(False)
         self._output.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
         self._output.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self._output.setWordWrapMode(QTextOption.WrapMode.WordWrap)
         layout.addWidget(self._output, 1)
 
         # Separator line
@@ -80,13 +82,28 @@ class TerminalWidget(QWidget):
         sep.setStyleSheet("color: #444; max-height: 1px;")
         layout.addWidget(sep)
 
-        # Input (QLineEdit — provides native cursor + editing)
-        self._input = QLineEdit()
+        # ── Input area: path label + QTextEdit ──
+        input_row = QHBoxLayout()
+        input_row.setContentsMargins(0, 0, 0, 0)
+        input_row.setSpacing(0)
+
+        self._path_label = QLabel("PS> ")
+        self._path_label.setStyleSheet("padding: 8px 4px 8px 10px; font-weight: bold;")
+        input_row.addWidget(self._path_label)
+
+        self._input = QTextEdit()
+        self._input.setAcceptRichText(False)
+        self._input.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._input.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._input.setWordWrapMode(QTextOption.WrapMode.WordWrap)
         self._input.setPlaceholderText("")
-        self._input.returnPressed.connect(self._on_enter)
-        # Intercept Up/Down arrows for history
+        self._input.setMaximumHeight(120)
+        self._input.setTabChangesFocus(True)
+        # Send on Enter (Shift+Enter for newline)
         self._input.installEventFilter(self)
-        layout.addWidget(self._input)
+        input_row.addWidget(self._input, 1)
+
+        layout.addLayout(input_row)
 
         # ── Theme ──
         self._theme = get_theme(cfg.ui.theme if cfg else "campbell")
@@ -101,10 +118,17 @@ class TerminalWidget(QWidget):
     # ── Send command ──────────────────────────────────────────────────
 
     def eventFilter(self, obj, event):
-        """Intercept Up/Down arrows in the input field for history."""
+        """Intercept key events in the input QTextEdit."""
         from PyQt6.QtCore import QEvent
         if obj is self._input and event.type() == QEvent.Type.KeyPress:
             key = event.key()
+            mods = event.modifiers()
+            # Enter (without Shift) sends the command
+            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and \
+                    not (mods & Qt.KeyboardModifier.ShiftModifier):
+                self._on_enter()
+                return True
+            # Up/Down arrows for history
             if key == Qt.Key.Key_Up:
                 self._history_up()
                 return True
@@ -113,17 +137,32 @@ class TerminalWidget(QWidget):
                 return True
         return super().eventFilter(obj, event)
 
+    def _input_text(self) -> str:
+        """Get plain text from the input QTextEdit."""
+        return self._input.toPlainText()
+
+    def _set_input_text(self, text: str):
+        """Set plain text in the input QTextEdit."""
+        self._input.setPlainText(text)
+        # Move cursor to end
+        cursor = self._input.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self._input.setTextCursor(cursor)
+
+    def _clear_input(self):
+        """Clear the input QTextEdit."""
+        self._input.clear()
+
     def _history_up(self):
         """Load the previous command from history."""
         if not self._history:
             return
         if self._hist_idx == -1:
-            self._hist_saved = self._input.text()
+            self._hist_saved = self._input_text()
             self._hist_idx = len(self._history) - 1
         elif self._hist_idx > 0:
             self._hist_idx -= 1
-        self._input.setText(self._history[self._hist_idx])
-        self._input.setCursorPosition(len(self._input.text()))
+        self._set_input_text(self._history[self._hist_idx])
 
     def _history_down(self):
         """Load the next command from history."""
@@ -131,16 +170,15 @@ class TerminalWidget(QWidget):
             return
         if self._hist_idx < len(self._history) - 1:
             self._hist_idx += 1
-            self._input.setText(self._history[self._hist_idx])
+            self._set_input_text(self._history[self._hist_idx])
         else:
             self._hist_idx = -1
-            self._input.setText(self._hist_saved)
-        self._input.setCursorPosition(len(self._input.text()))
+            self._set_input_text(self._hist_saved)
 
     def _on_enter(self):
         """Send the current input line to the shell."""
-        cmd = self._input.text()
-        self._input.clear()
+        cmd = self._input_text().strip()
+        self._clear_input()
         self._hist_idx = -1
         self._hist_saved = ""
         if cmd.strip():
@@ -162,14 +200,23 @@ class TerminalWidget(QWidget):
         sel_bg = self._theme.selection_bg
         sel_fg = self._theme.selection_fg
 
+        # Output area
         self._output.setStyleSheet(
             f"QTextEdit {{ background-color: {bg}; color: {fg}; "
             f"font-family: '{ff}', 'Consolas', monospace; font-size: {fs}px; "
             f"padding: 10px; border: none; "
             f"selection-background-color: {sel_bg}; selection-color: {sel_fg}; }}"
         )
+
+        # Path label
+        self._path_label.setStyleSheet(
+            f"QLabel {{ background-color: {bg}; color: {fg}; "
+            f"font-family: '{ff}', 'Consolas', monospace; font-size: {fs}px; "
+            f"padding: 8px 4px 8px 10px; font-weight: bold; border: none; }}")
+
+        # Input QTextEdit
         self._input.setStyleSheet(
-            f"QLineEdit {{ background-color: {bg}; color: {fg}; "
+            f"QTextEdit {{ background-color: {bg}; color: {fg}; "
             f"font-family: '{ff}', 'Consolas', monospace; font-size: {fs}px; "
             f"padding: 8px 10px; border: none; "
             f"selection-background-color: {sel_bg}; selection-color: {sel_fg}; }}"
@@ -370,7 +417,7 @@ class TerminalWidget(QWidget):
         cb = QApplication.clipboard()
         text = cb.text()
         if text:
-            self._input.insert(text)
+            self._input.insertPlainText(text)
 
     # ── QTextEdit compat proxies (used by MainWindow) ─────────────────
 

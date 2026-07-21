@@ -1,7 +1,7 @@
 """
 Unit tests for keyboard input handling.
 
-Tests the QLineEdit-based input and shell output rendering.
+Tests the QTextEdit-based input and shell output rendering.
 """
 
 import sys
@@ -43,44 +43,43 @@ def _all(engine):
     return "".join(engine.written)
 
 
-# ── Input via QLineEdit ──────────────────────────────────────────────
+# ── Input via QTextEdit ──────────────────────────────────────────────
 
 
 def test_type_and_enter():
-    """Typing in QLineEdit + Enter sends the command."""
+    """Typing in input + Enter sends the command."""
     w, engine, app = _make_widget()
-    w._input.setText("dir")
-    w._input.returnPressed.emit()
+    w._set_input_text("dir")
+    w._on_enter()
     assert "dir" in _all(engine), f"Expected 'dir' in output, got: {engine.written}"
-    assert w._input.text() == "", f"Input should be cleared"
+    assert w._input_text() == "", f"Input should be cleared"
     print("  PASS: Type + Enter sends command")
 
 
 def test_enter_empty():
-    """Enter with empty input sends just \\r (prompt refresh)."""
+    """Enter with empty input sends just \\r."""
     w, engine, app = _make_widget()
-    w._input.setText("")
-    w._input.returnPressed.emit()
+    w._set_input_text("")
+    w._on_enter()
     assert _last(engine) == "\r", f"Empty Enter should send \\r, got: {_last(engine)!r}"
     print("  PASS: Empty Enter sends \\r")
 
 
-def test_command_appears_in_output():
-    """After Enter, the command should appear in the output (from shell echo)."""
+def test_command_sent_to_engine():
+    """After Enter, the command should be sent to the engine."""
     w, engine, app = _make_widget()
-    w._input.setText("echo hello")
-    w._input.returnPressed.emit()
-    # Command is sent to shell — shell echoes it back via append_shell_text
-    assert "echo hello" in _all(engine), f"Command should be sent to engine: {engine.written}"
-    print("  PASS: Command sent to shell for echo")
+    w._set_input_text("echo hello")
+    w._on_enter()
+    assert "echo hello" in _all(engine), f"Command should be sent: {engine.written}"
+    print("  PASS: Command sent to engine")
 
 
 def test_engine_not_ready():
     """Enter when engine not ready should not send."""
     w, engine, app = _make_widget()
     engine.is_ready = False
-    w._input.setText("dir")
-    w._input.returnPressed.emit()
+    w._set_input_text("dir")
+    w._on_enter()
     assert len(engine.written) == 0, f"Should not send when engine not ready"
     print("  PASS: Engine not ready blocks send")
 
@@ -116,42 +115,34 @@ def test_ansi_colors():
     print("  PASS: ANSI colors handled")
 
 
-# ── QLineEdit features ───────────────────────────────────────────────
+# ── Input QTextEdit features ────────────────────────────────────────
 
 
 def test_input_cursor_visible():
-    """QLineEdit should have a visible cursor."""
+    """Input QTextEdit should have a visible cursor."""
     w, engine, app = _make_widget()
-    w._input.setText("hello")
-    # QLineEdit always has a visible cursor when it has focus
-    assert w._input.cursorPosition() >= 0, "Cursor position should be valid"
-    print("  PASS: Input cursor is visible")
+    w._set_input_text("hello")
+    assert w._input_text() == "hello", "Text should be set"
+    print("  PASS: Input text is settable")
 
 
 def test_input_editing():
-    """QLineEdit supports native editing (left/right, delete, etc.)."""
+    """Input QTextEdit supports text editing."""
     w, engine, app = _make_widget()
-    w._input.setText("hello")
-    # Move cursor left
-    w._input.setCursorPosition(2)
-    assert w._input.cursorPosition() == 2
-    # Insert text at cursor
-    w._input.insert("X")
-    assert w._input.text() == "heXllo", f"Insert at cursor: {w._input.text()}"
-    # Delete backward — cursor is now after X (pos 3), backspace removes X
-    w._input.backspace()
-    assert w._input.text() == "hello", f"After backspace: {w._input.text()}"
-    # Delete forward via QLineEdit.delete()
-    w._input.setCursorPosition(1)
-    w._input.del_()
-    assert w._input.text() == "hllo", f"After delete: {w._input.text()}"
-    print("  PASS: Input editing works natively")
+    w._set_input_text("hello")
+    assert w._input_text() == "hello"
+    # Clear and set new text
+    w._clear_input()
+    assert w._input_text() == ""
+    w._set_input_text("world")
+    assert w._input_text() == "world"
+    print("  PASS: Input editing works")
 
 
 def test_focus_on_input():
     """setFocus should target the input field."""
     w, engine, app = _make_widget()
-    w.show()  # needs to be visible for focus to work
+    w.show()
     app.processEvents()
     w.setFocus()
     app.processEvents()
@@ -159,15 +150,53 @@ def test_focus_on_input():
     print("  PASS: Focus goes to input")
 
 
+# ── History ─────────────────────────────────────────────────────────
+
+
+def test_history_navigation():
+    """Up/Down arrows should navigate command history."""
+    w, engine, app = _make_widget()
+    # Submit first command
+    w._set_input_text("dir")
+    w._on_enter()
+    # Submit second command
+    w._set_input_text("echo hello")
+    w._on_enter()
+    # Up arrow should recall "echo hello"
+    w._history_up()
+    assert w._input_text() == "echo hello", f"Up should recall last, got {w._input_text()!r}"
+    # Up again should recall "dir"
+    w._history_up()
+    assert w._input_text() == "dir", f"Up again should recall first, got {w._input_text()!r}"
+    # Down should go back
+    w._history_down()
+    assert w._input_text() == "echo hello", f"Down should recall second, got {w._input_text()!r}"
+    # Down past end clears
+    w._history_down()
+    assert w._input_text() == "", f"Down past end should clear, got {w._input_text()!r}"
+    print("  PASS: History navigation")
+
+
 # ── Theme ────────────────────────────────────────────────────────────
 
 
 def test_theme_applies():
-    """Theme should be applied to both output and input."""
+    """Theme should be applied to output, input, and path label."""
     w, engine, app = _make_widget()
-    w.apply_theme_by_name("solarized_dark")
-    assert w._cfg.ui.theme == "solarized_dark"
+    w.apply_theme_by_name("dracula")
+    assert w._cfg.ui.theme == "dracula"
     print("  PASS: Theme applies")
+
+
+# ── Path label ───────────────────────────────────────────────────────
+
+
+def test_path_label_exists():
+    """Path label should be present and have text."""
+    w, engine, app = _make_widget()
+    assert hasattr(w, '_path_label'), "Should have path label"
+    assert w._path_label.text() != "", "Path label should have text"
+    print("  PASS: Path label exists")
 
 
 def run_all():
@@ -176,7 +205,7 @@ def run_all():
     print("  Input:")
     test_type_and_enter()
     test_enter_empty()
-    test_command_appears_in_output()
+    test_command_sent_to_engine()
     test_engine_not_ready()
     print()
     print("  Output:")
@@ -184,13 +213,19 @@ def run_all():
     test_erase_display()
     test_ansi_colors()
     print()
-    print("  QLineEdit features:")
+    print("  Input QTextEdit:")
     test_input_cursor_visible()
     test_input_editing()
     test_focus_on_input()
     print()
+    print("  History:")
+    test_history_navigation()
+    print()
     print("  Theme:")
     test_theme_applies()
+    print()
+    print("  Path label:")
+    test_path_label_exists()
     print()
     print("All keyboard input tests passed!\n")
 

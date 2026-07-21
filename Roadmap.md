@@ -232,10 +232,13 @@ A Windows-focused development plan for building OmniTerm into a full-featured te
 | **Session Recording** | Record terminal sessions to `.cast` files (asciinema-compatible) |
 | **Plugin API** | Python plugin system for custom extensions |
 | **GPU Acceleration** | Migrate rendering to a QOpenGLWidget for massive output |
-| **Split Pane Profiles** | Different shell/theme per pane in a split layout |
-| **Quake Mode** | `Ctrl+~` dropdown terminal (like console/tilda on Linux) |
 | **Font Picker** | Enumerate installed monospace fonts and let user pick |
 | **F3 Search Navigation** | `F3` / `Shift+F3` for next/previous match in search bar |
+| **Quake Mode** | `Ctrl+~` dropdown terminal (like console/tilda on Linux) |
+| **ConPTY Backend** | Replace winpty with Windows ConPTY for better compatibility |
+| **Tab Splits** | Reimplement split panes with proper QWidget-based rendering |
+| **Custom Prompts** | Per-profile custom prompt configuration |
+| **Tab Rename** | Right-click tab to rename |
 
 ---
 
@@ -247,8 +250,10 @@ A Windows-focused development plan for building OmniTerm into a full-featured te
 | `v0.3` | Theming | ✅ Done |
 | `v0.4` | ANSI Rendering | ✅ Done |
 | `v0.5` | Advanced Input | ✅ Done |
-| `v0.6` | Multi-Tab & Splits | ✅ Done |
+| `v0.6` | Multi-Tab & Splits | ✅ Done (splits removed in v1.2) |
 | `v0.7` | Profiles & Plugins | ✅ Done |
 | `v0.8` | Distribution | ✅ Done |
 | `v0.9` | SSH Sessions | ✅ Done |
 | `v1.0` | Serial + WSL | ✅ Done |
+| `v1.1` | Widget Rewrite | ✅ Done |
+| `v1.2` | Profile Management & Themes | ✅ Done |
