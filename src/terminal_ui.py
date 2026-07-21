@@ -62,6 +62,10 @@ class TerminalWidget(QWidget):
         self._hist_idx = -1          # -1 = not browsing
         self._hist_saved = ""        # saved input while browsing
 
+        # ── Current path (detected from shell prompt) ──
+        self._current_path = ""
+        self._prompt_prefix = ""
+
         # ── Layout ──
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -87,7 +91,7 @@ class TerminalWidget(QWidget):
         input_row.setContentsMargins(0, 0, 0, 0)
         input_row.setSpacing(0)
 
-        self._path_label = QLabel("PS> ")
+        self._path_label = QLabel("❯ ")
         self._path_label.setStyleSheet("padding: 8px 4px 8px 10px; font-weight: bold;")
         input_row.addWidget(self._path_label)
 
@@ -95,11 +99,12 @@ class TerminalWidget(QWidget):
         self._input.setAcceptRichText(False)
         self._input.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._input.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._input.setWordWrapMode(QTextOption.WrapMode.WordWrap)
-        self._input.setPlaceholderText("")
+        self._input.setWordWrapMode(QTextOption.WrapMode.NoWrap)
+        self._input.setPlaceholderText("Type a command...")
+        self._input.setMinimumHeight(28)
         self._input.setMaximumHeight(120)
         self._input.setTabChangesFocus(True)
-        # Send on Enter (Shift+Enter for newline)
+        self._input.document().contentsChanged.connect(self._resize_input)
         self._input.installEventFilter(self)
         input_row.addWidget(self._input, 1)
 
@@ -114,6 +119,15 @@ class TerminalWidget(QWidget):
 
         # Focus the input
         self._input.setFocus()
+
+    def _resize_input(self):
+        """Auto-expand input QTextEdit based on content height."""
+        doc = self._input.document()
+        doc_height = int(doc.size().height()) + 16
+        new_height = max(28, min(doc_height, 120))
+        if self._input.height() != new_height:
+            self._input.setMinimumHeight(new_height)
+            self._input.setMaximumHeight(new_height)
 
     # ── Send command ──────────────────────────────────────────────────
 
@@ -371,6 +385,38 @@ class TerminalWidget(QWidget):
 
         self._output.setTextCursor(cursor)
         self._output.ensureCursorVisible()
+
+        # Detect prompt path from the raw text
+        self._detect_path(text)
+
+    def _detect_path(self, text: str):
+        """Extract current path from shell prompt in the output text.
+
+        Detects patterns like PS C:\\path>, C:\\path>, user@host:~/path$ etc.
+        """
+        import re
+        # Strip ANSI escapes for pattern matching
+        clean = strip_ansi(text)
+
+        # PowerShell / cmd: PS C:\path> or C:\path>
+        m = re.search(r'(?:PS\s+)?([A-Z]:\\[^\s>]*)(?:>|_)\s*$', clean)
+        if m:
+            self._current_path = m.group(1)
+            self._path_label.setText(f"❯ {self._current_path} ")
+            return
+
+        # Bash/WSL: user@host:~/path$ or /path$
+        m = re.search(r'(\S+:\S+)(?:\$|#)\s*$', clean)
+        if m:
+            self._current_path = m.group(1)
+            self._path_label.setText(f"❯ {self._current_path} ")
+            return
+
+        # Just a path ending with > or $
+        m = re.search(r'([/\\][^\s>]*)(?:>|$)\s*$', clean)
+        if m and len(m.group(1)) > 2:
+            self._current_path = m.group(1)
+            self._path_label.setText(f"❯ {self._current_path} ")
 
     def _handle_cursor_pos(self, cursor, row, col):
         """Move cursor to (row, col) and overwrite if moving backward."""
