@@ -2,7 +2,7 @@
 Profile management dialog for OmniTerm.
 
 Provides a UI to add, edit, and delete shell profiles.
-Each profile can be configured with command, args, and Run As Admin flag.
+Each profile can be configured with name, command, args, working dir, and admin flag.
 """
 
 from __future__ import annotations
@@ -10,12 +10,67 @@ from __future__ import annotations
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QTableWidget, QTableWidgetItem,
     QPushButton, QHeaderView, QAbstractItemView, QLineEdit, QCheckBox,
-    QMessageBox, QLabel, QComboBox, QWidget,
+    QMessageBox, QLabel, QWidget, QFormLayout, QDialogButtonBox,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
 
 from config import Config, Profile
+
+
+class ProfileEditDialog(QDialog):
+    """Dialog for editing a single profile's fields."""
+
+    def __init__(self, name: str = "", profile: Profile | None = None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Edit Profile" if profile else "New Profile")
+        self.setMinimumWidth(450)
+
+        layout = QFormLayout(self)
+
+        # Name
+        self._name_edit = QLineEdit(name)
+        layout.addRow("Profile Name:", self._name_edit)
+
+        # Command
+        self._cmd_edit = QLineEdit(profile.command if profile else "cmd.exe")
+        self._cmd_edit.setPlaceholderText("e.g. cmd.exe, powershell.exe, bash")
+        layout.addRow("Command:", self._cmd_edit)
+
+        # Args (space-separated)
+        args_str = " ".join(profile.args) if profile and profile.args else ""
+        self._args_edit = QLineEdit(args_str)
+        self._args_edit.setPlaceholderText("e.g. -NoLogo -NoProfile")
+        layout.addRow("Arguments:", self._args_edit)
+
+        # Working Directory
+        self._dir_edit = QLineEdit(profile.working_dir if profile and profile.working_dir else "")
+        self._dir_edit.setPlaceholderText("Leave empty for default")
+        layout.addRow("Working Dir:", self._dir_edit)
+
+        # Admin
+        self._admin_cb = QCheckBox("Run as Administrator")
+        self._admin_cb.setChecked(profile.admin if profile else False)
+        layout.addRow("", self._admin_cb)
+
+        # Buttons
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
+
+    def get_data(self) -> tuple[str, Profile]:
+        """Return (name, Profile) from the form."""
+        name = self._name_edit.text().strip() or "unnamed"
+        args = self._args_edit.text().strip().split()
+        working_dir = self._dir_edit.text().strip() or None
+        profile = Profile(
+            command=self._cmd_edit.text().strip() or "cmd.exe",
+            args=args,
+            admin=self._admin_cb.isChecked(),
+            working_dir=working_dir,
+        )
+        return name, profile
 
 
 class ProfileManagerDialog(QDialog):
@@ -25,33 +80,38 @@ class ProfileManagerDialog(QDialog):
         super().__init__(parent)
         self._cfg = cfg
         self.setWindowTitle("Manage Profiles")
-        self.setMinimumSize(600, 400)
+        self.setMinimumSize(700, 420)
 
         layout = QVBoxLayout(self)
 
+        # ── Hint label ──
+        hint = QLabel("Double-click a row to edit, or use the buttons below.")
+        hint.setStyleSheet("color: #888; font-size: 11px;")
+        layout.addWidget(hint)
+
         # ── Profile table ──
         self._table = QTableWidget()
-        self._table.setColumnCount(4)
-        self._table.setHorizontalHeaderLabels(["Name", "Command", "Args", "Admin"])
+        self._table.setColumnCount(5)
+        self._table.setHorizontalHeaderLabels(
+            ["Name", "Command", "Arguments", "Working Dir", "Admin"])
         self._table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.ResizeMode.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.ResizeMode.Stretch)
-        self._table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.ResizeMode.Stretch)
-        self._table.horizontalHeader().setSectionResizeMode(
-            3, QHeaderView.ResizeMode.Fixed)
-        self._table.setColumnWidth(3, 70)
+            QHeaderView.ResizeMode.Stretch)
+        self._table.setColumnWidth(4, 70)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self._table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked)
+        self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table.doubleClicked.connect(self._edit_profile)
         layout.addWidget(self._table)
 
         # ── Button row ──
         btn_layout = QHBoxLayout()
 
-        self._add_btn = QPushButton("+ Add Profile")
+        self._add_btn = QPushButton("+ New Profile")
         self._add_btn.clicked.connect(self._add_profile)
         btn_layout.addWidget(self._add_btn)
+
+        self._edit_btn = QPushButton("Edit")
+        self._edit_btn.clicked.connect(self._edit_profile)
+        btn_layout.addWidget(self._edit_btn)
 
         self._dup_btn = QPushButton("Duplicate")
         self._dup_btn.clicked.connect(self._duplicate_profile)
@@ -87,46 +147,61 @@ class ProfileManagerDialog(QDialog):
         row = self._table.rowCount()
         self._table.insertRow(row)
 
-        # Name
-        name_item = QTableWidgetItem(name)
-        name_item.setFlags(name_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        self._table.setItem(row, 0, name_item)
+        items = [
+            name,
+            profile.command,
+            " ".join(profile.args) if profile.args else "",
+            profile.working_dir or "",
+        ]
+        for col, text in enumerate(items):
+            item = QTableWidgetItem(text)
+            item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self._table.setItem(row, col, item)
 
-        # Command
-        self._table.setItem(row, 1, QTableWidgetItem(profile.command))
-
-        # Args (comma-separated)
-        args_str = ", ".join(profile.args) if profile.args else ""
-        self._table.setItem(row, 2, QTableWidgetItem(args_str))
-
-        # Admin checkbox
+        # Admin checkbox (read-only display)
         admin_cb = QCheckBox()
         admin_cb.setChecked(profile.admin)
-        admin_cb.stateChanged.connect(lambda state, r=row: self._on_admin_changed(r, state))
+        admin_cb.setEnabled(False)
         cell_widget = QWidget()
         cb_layout = QHBoxLayout(cell_widget)
         cb_layout.addWidget(admin_cb)
         cb_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         cb_layout.setContentsMargins(0, 0, 0, 0)
-        self._table.setCellWidget(row, 3, cell_widget)
-
-    def _on_admin_changed(self, row: int, state: int):
-        """Handle admin checkbox change."""
-        pass  # State is read when saving
+        self._table.setCellWidget(row, 4, cell_widget)
 
     def _add_profile(self):
-        """Add a new empty profile."""
-        # Find a unique name
-        base = "new_profile"
-        name = base
-        counter = 1
-        while name in self._cfg.profiles:
-            name = f"{base}_{counter}"
-            counter += 1
+        """Open the edit dialog to create a new profile."""
+        dlg = ProfileEditDialog(parent=self)
+        if dlg.exec():
+            name, profile = dlg.get_data()
+            if name in self._cfg.profiles:
+                QMessageBox.warning(self, "Duplicate",
+                    f"Profile '{name}' already exists.")
+                return
+            self._cfg.profiles[name] = profile
+            self._add_row(name, profile)
 
-        profile = Profile(command="cmd.exe")
-        self._cfg.profiles[name] = profile
-        self._add_row(name, profile)
+    def _edit_profile(self):
+        """Open the edit dialog for the selected profile."""
+        row = self._table.currentRow()
+        if row < 0:
+            return
+
+        old_name = self._table.item(row, 0).text()
+        profile = self._cfg.profiles.get(old_name)
+        if not profile:
+            return
+
+        dlg = ProfileEditDialog(name=old_name, profile=profile, parent=self)
+        if dlg.exec():
+            new_name, new_profile = dlg.get_data()
+            # Remove old entry if name changed
+            if new_name != old_name:
+                self._cfg.profiles.pop(old_name, None)
+            self._cfg.profiles[new_name] = new_profile
+
+            # Refresh table
+            self._load_profiles()
 
     def _duplicate_profile(self):
         """Duplicate the selected profile."""
@@ -139,7 +214,6 @@ class ProfileManagerDialog(QDialog):
         if not old_profile:
             return
 
-        # Find a unique name
         base = f"{old_name}_copy"
         name = base
         counter = 1
@@ -180,19 +254,19 @@ class ProfileManagerDialog(QDialog):
             name = self._table.item(row, 0).text()
             command = self._table.item(row, 1).text() or "cmd.exe"
             args_str = self._table.item(row, 2).text() or ""
-            args = [a.strip() for a in args_str.split(",") if a.strip()]
+            args = args_str.split()
+            working_dir = self._table.item(row, 3).text().strip() or None
 
-            # Get admin checkbox state
+            cell = self._table.cellWidget(row, 4)
             admin = False
-            cell = self._table.cellWidget(row, 3)
             if cell:
                 cb = cell.findChild(QCheckBox)
                 if cb:
                     admin = cb.isChecked()
 
             self._cfg.profiles[name] = Profile(
-                command=command, args=args, admin=admin)
+                command=command, args=args, admin=admin,
+                working_dir=working_dir)
 
-        # Persist to file
         self._cfg.save()
         self.accept()
