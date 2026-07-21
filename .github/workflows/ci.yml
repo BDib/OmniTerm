@@ -52,7 +52,7 @@ jobs:
         name: OmniTerm-pyinstaller-${{ github.sha }}
         path: dist/pyOmniTerm.exe
 
-  # ── Build with Nuitka + create installer (on tag push) ──
+  # ── Build with PyInstaller + create installer (on tag push) ──
   release:
     needs: test
     if: startsWith(github.ref, 'refs/tags/v')
@@ -72,34 +72,21 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install nuitka
-
-    - name: Build with Nuitka
-      run: python -m nuitka --standalone --enable-plugin=pyqt6 --output-dir=dist_nuitka --output-filename=OmniTerm.exe --include-data-file=settings.toml=settings.toml --include-package=winpty --include-package=serial --include-package=paramiko --include-package=toml --nofollow-import-to=tkinter,matplotlib,numpy,scipy,pandas,pytest,unittest --windows-console-mode=disable src/Main.py
-
-    - name: Copy Nuitka build to dist
-      run: |
-        mkdir dist
-        cp -r dist_nuitka/Main.dist/* dist/
-
-    - name: Build PyInstaller (fallback)
-      run: |
         pip install pyinstaller
-        pyinstaller OmniTerm.spec --noconfirm
+
+    - name: Build with PyInstaller
+      run: pyinstaller OmniTerm.spec --noconfirm
 
     - name: Install Inno Setup
-      run: |
-        choco install innosetup -y --no-progress
+      run: choco install innosetup -y --no-progress
 
     - name: Build installer
-      run: |
-        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\omniterm.iss
+      run: & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\omniterm.iss
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          dist/OmniTerm.exe
           dist/pyOmniTerm.exe
           installer_output/OmniTermSetup.exe
         generate_release_notes: true
