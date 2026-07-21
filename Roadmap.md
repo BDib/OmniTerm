@@ -261,3 +261,4 @@ A Windows-focused development plan for building OmniTerm into a full-featured te
 | `v1.4` | CI Nuitka + Win10/11 x64 Release | ✅ Done |
 | `v1.5` | Search/F3 + Docs + Menu Cleanup | ✅ Done |
 | `v1.6` | Config Fallback + Search Dialog Fix + Input Fix | ✅ Done |
+| `v2.0` | ConPTY Backend + Source Optimization | ✅ Done |

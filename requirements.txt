@@ -1,7 +1,4 @@
 PyQt6
-python-bidi
-arabic-reshaper
 toml
-pywinpty
 paramiko
 pyserial

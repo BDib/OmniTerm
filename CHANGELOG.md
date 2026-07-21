@@ -1,5 +1,40 @@
 # Changelog
 
+## v2.0.0 — Session 7 (2026-07-21)
+
+### ConPTY Backend (major)
+- **ConPTY replaces winpty** — uses Windows' native Pseudo Console API via ctypes
+- **Automatic fallback** — tries ConPTY first, falls back to winpty if unavailable
+- **No more winpty dependency** — removed from requirements.txt
+- **Fixed cmd.exe crash** — winpty pipe connectivity issue caused 5-second exit; ConPTY resolves this
+- **Admin mode** — elevated processes launch via ShellExecuteW
+
+### Source Optimization
+- Removed redundant code, blank lines, excessive comments
+- One-liner patterns where appropriate
+- Streamlined error handling across all modules
+
+### Tests
+- Comprehensive keyboard input tests (all keys, Ctrl combinations, navigation)
+- Rendering pipeline tests (CR, ERASE_DISPLAY, ERASE_LINE, ANSI colors)
+- Profile management tests (add, edit, delete, admin flag)
+- Search dialog tests (find next/prev, highlight all)
+- Config tests (defaults, auto-creation, path resolution)
+
+### Documentation
+- CHANGELOG.md updated for v2.0.0
+- Roadmap.md updated
+- FIXES.md renamed to TECHNICAL_NOTES.md (in .gitignore)
+- KNOWN_ISSUES.md, CONTRIBUTING.md, BUILD.md maintained
+
+### Build
+- Nuitka onefile: ~26 MB (fast startup)
+- PyInstaller: ~44 MB (fallback)
+- Inno Setup installer
+- All three verified working
+
+---
+
 ## v1.6.0 — Session 6 (2026-07-21)
 
 ### Config & Startup
