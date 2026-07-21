@@ -11,6 +11,10 @@ from pathlib import Path
 # Ensure the project root is on the path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+# Create QApplication once (tests that need Qt widgets reuse this)
+from PyQt6.QtWidgets import QApplication
+_app = QApplication.instance() or QApplication(sys.argv)
+
 from tests import (
     test_config, test_themes, test_ansi_parser,
     test_mouse_scroll, test_tabs, test_profiles, test_distribution,
