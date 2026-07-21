@@ -567,10 +567,7 @@ class MainWindow(QMainWindow):
 
         # Detect if running as admin
         self._is_admin = self._check_admin()
-        title = "OmniTerm"
-        if self._is_admin:
-            title = "OmniTerm [Administrator]"
-        self.setWindowTitle(title)
+        self.setWindowTitle("OmniTerm")
         self._apply_config()
         self._restore_geometry()
 
@@ -1015,7 +1012,8 @@ class MainWindow(QMainWindow):
             cmd = shell
             title = self._shell_title(shell)
 
-        if admin:
+        # Show [Admin] if this process is elevated OR if admin was requested
+        if admin or self._is_admin:
             title += " [Admin]"
 
         idx = self._tabs.addTab(terminal, title)
@@ -1023,8 +1021,6 @@ class MainWindow(QMainWindow):
         self._tabs.setCurrentIndex(idx)
 
         engine.start(cmd, admin=admin)
-
-        engine.start(cmd)
         terminal.setFocus()
         return idx
 
