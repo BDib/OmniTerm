@@ -25,10 +25,15 @@ Desktop.ini
 # Build output
 build/
 dist/
+dist_nuitka/
+OUT/
 
 # PyInstaller generated (keep OmniTerm.spec tracked)
 *.spec.bak
 *.manifest
+
+# Nuitka
+nuitka-crash-report.xml
 
 # Logs
 *.log
