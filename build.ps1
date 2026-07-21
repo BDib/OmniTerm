@@ -52,24 +52,24 @@ if ($Mode -like "nuitka*") {
         python -m pip install nuitka --quiet
     }
 
+    # Nuitka's Scons backend fails with spaces in temp paths — fix it
+    $nbuildTemp = "C:\Temp\nbuild"
+    New-Item -ItemType Directory -Force -Path $nbuildTemp | Out-Null
+    $oldTemp = $env:TEMP; $oldTmp = $env:TMP
+    $env:TEMP = $nbuildTemp; $env:TMP = $nbuildTemp
+
     $nuitka_args = @(
         "--standalone",
-        "--onefile",
-        "--windows-console-mode=disable",
-        "--output-dir=dist",
+        "--enable-plugin=pyqt6",
+        "--output-dir=dist_nuitka",
         "--output-filename=OmniTerm.exe",
-        "--include-data-dir=src=src",
         "--include-data-file=settings.toml=settings.toml",
         "--include-package=winpty",
-        "--include-package=PyQt6",
-        "--include-package=PyQt6.QtWidgets",
-        "--include-package=PyQt6.QtCore",
-        "--include-package=PyQt6.QtGui",
         "--include-package=serial",
         "--include-package=paramiko",
         "--include-package=toml",
         "--nofollow-import-to=tkinter,matplotlib,numpy,scipy,pandas,pytest,unittest",
-        "--windows-icon-from-ico=assets/OmniTerm.ico",
+        "--windows-console-mode=disable",
         "src/Main.py"
     )
 
@@ -77,9 +77,18 @@ if ($Mode -like "nuitka*") {
         $nuitka_args += "--debug"
     }
 
-    Write-Host "Building with Nuitka (standalone onefile)..."
-    Write-Host "This may take several minutes on first run..."
+    Write-Host "Building with Nuitka (standalone)..."
+    Write-Host "First run compiles C code — may take several minutes."
     python -m nuitka @nuitka_args
+
+    # Restore temp
+    $env:TEMP = $oldTemp; $env:TMP = $oldTmp
+
+    # Copy output to dist
+    if (Test-Path "dist_nuitka\Main.dist\OmniTerm.exe") {
+        Copy-Item "dist_nuitka\Main.dist\OmniTerm.exe" "dist\OmniTerm.exe" -Force
+        Write-Host "Copied to dist\OmniTerm.exe"
+    }
 
 } else {
     # ── PyInstaller Build ──
