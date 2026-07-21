@@ -660,26 +660,44 @@ class MainWindow(QMainWindow):
         import ctypes
         import sys
         import os
+        import logging
+        log = logging.getLogger(__name__)
 
-        # Get the path to the running executable or script
         if getattr(sys, 'frozen', False):
             exe = sys.executable
         else:
-            exe = sys.executable  # python.exe
+            exe = sys.executable
+            main_py = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)), "Main.py")
+            if not os.path.isfile(main_py):
+                main_py = os.path.join(os.getcwd(), "src", "Main.py")
 
-        # Build args to pass to the elevated instance
-        args = [f"--shell", f"{profile.command} {' '.join(profile.args)}".strip()]
+        full_cmd = profile.command
+        if profile.args:
+            full_cmd = f"{profile.command} {' '.join(profile.args)}"
 
-        params = " ".join(f'"{a}"' for a in args)
+        if getattr(sys, 'frozen', False):
+            shell_arg = f'--shell "{full_cmd}"'
+        else:
+            shell_arg = f'"{main_py}" --shell "{full_cmd}"'
 
-        # Use ShellExecuteW with "runas" — triggers UAC
-        result = ctypes.windll.shell32.ShellExecuteW(
-            None, "runas", exe, params, None, 1
-        )
-        if result <= 32:
+        log.info("Launching as admin: %s %s", exe, shell_arg)
+
+        try:
+            result = ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", exe, shell_arg, None, 1
+            )
+            log.info("ShellExecuteW result: %d", result)
+            if result <= 32:
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Admin",
+                    "Failed to launch as admin.\n"
+                    "The UAC prompt may have been cancelled, or the\n"
+                    f"executable was not found:\n{exe}")
+        except Exception as e:
+            log.error("ShellExecuteW exception: %s", e)
             from PyQt6.QtWidgets import QMessageBox
-            QMessageBox.warning(self, "Admin",
-                "Failed to launch as admin. User may have cancelled UAC.")
+            QMessageBox.critical(self, "Admin Error", str(e))
 
     def _manage_profiles(self):
         """Open the profile manager dialog."""
