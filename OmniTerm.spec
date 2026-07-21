@@ -57,7 +57,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="pyOmniTerm",
+    name="pyOmniTerm-win10-x64",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -5,7 +5,7 @@
 ; Or use: .\build.ps1 installer
 
 #define MyAppName "OmniTerm"
-#define MyAppVersion "1.3.0"
+#define MyAppVersion "1.4.0"
 #define MyAppPublisher "BDib"
 #define MyAppURL "https://github.com/BDib/OmniTerm"
 #define MyAppExeName "OmniTerm.exe"
@@ -22,7 +22,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=installer_output
-OutputBaseFilename=OmniTermSetup
+OutputBaseFilename=OmniTermSetup-win10-x64
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern

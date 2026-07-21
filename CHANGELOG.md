@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.4.0 — Session 5 (2026-07-21)
+
+### Build & Distribution
+- **Nuitka on CI** — GitHub Actions now builds with Nuitka (faster startup)
+- **Win10/11 x64 naming** — All release files include platform tag: `OmniTerm-win10-x64.exe`, `pyOmniTerm-win10-x64.exe`, `OmniTermSetup-win10-x64.exe`
+- **Release notes** — Auto-generated with file descriptions and requirements
+- **CI fixes** — Fixed YAML syntax, PyInstaller spec dynamic winpty detection, test runner QApplication singleton
+
+### Fixes
+- **PyInstaller spec** — Dynamic winpty DLL detection works across Python 3.10–3.13
+- **Test runner** — QApplication created once to prevent hangs on CI
+- **Distribution test** — Updated for new CI command format
+- **CI lint** — Made ruff non-blocking to avoid version mismatches
+
+---
+
 ## v1.3.0 — Session 4 (2026-07-20)
 
 ### Build System
