@@ -133,7 +133,8 @@ class Config:
         cfg = cls()
 
         if not path.is_file():
-            # Create settings.toml with defaults next to the executable
+            # Create settings.toml with sensible defaults including profiles
+            cfg = cls._defaults()
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 cfg.save(path)
@@ -178,12 +179,43 @@ class Config:
             if action in BUILTIN_ACTIONS:
                 cfg.keybindings.append(Keybinding(shortcut=shortcut, action=action))
 
+        # If no profiles were loaded, use defaults
+        if not cfg.profiles:
+            defaults = cls._defaults()
+            cfg.profiles = defaults.profiles
+            cfg.default_profile = defaults.default_profile
+
         return cfg
 
     @classmethod
     def get_config_path(cls) -> Path:
         """Return the resolved config file path."""
         return _default_config_path()
+
+    @classmethod
+    def _defaults(cls) -> "Config":
+        """Return a Config with all default profiles and settings."""
+        cfg = cls()
+        cfg.profiles = {
+            "cmd": Profile(command="cmd.exe"),
+            "powershell": Profile(
+                command="powershell.exe",
+                args=["-NoLogo", "-NoProfile"],
+            ),
+            "pwsh": Profile(
+                command="pwsh.exe",
+                args=["-NoLogo", "-NoProfile"],
+            ),
+            "cmd_admin": Profile(command="cmd.exe", admin=True),
+            "powershell_admin": Profile(
+                command="powershell.exe",
+                args=["-NoLogo", "-NoProfile"],
+                admin=True,
+            ),
+            "wsl": Profile(command="wsl.exe"),
+        }
+        cfg.default_profile = "cmd"
+        return cfg
 
     def save(self, path: str | Path | None = None) -> None:
         """Save configuration back to TOML."""
