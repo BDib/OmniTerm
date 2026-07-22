@@ -1,5 +1,28 @@
 # Changelog
 
+## v2.1.0 — Session 8 (2026-07-22)
+
+### Critical Fix: Nuitka 5-second crash
+- **Root cause** — ConPTY used `STARTUPINFOW` (basic struct) instead of `STARTUPINFOEXW`. Python's ctypes allows setting `lpAttributeList` as a Python attribute, but it was never written to the binary memory `CreateProcessW` reads. The pseudo console attribute was silently ignored, leaving the child process without a console.
+- **Fix** — Defined proper `STARTUPINFOEXW` ctypes Structure with `lpAttributeList` in the binary layout. `cb` now reflects the correct extended struct size.
+- **Removed `CREATE_NO_WINDOW`** — ConPTY owns its own console; this flag was conflicting.
+- **Fixed write path** — Changed from `WriteConsoleInputCharacterW` (console input buffer) to `WriteFile` (pipe) for correct ConPTY input.
+- **Improved read loop** — Breaks cleanly on pipe close instead of spinning.
+- **Proper cleanup** — Pipe handles closed in `kill()` to prevent handle leaks.
+
+### Cleanup
+- Removed dead winpty fallback from `terminal_core.py` (not in requirements)
+- Added comprehensive error logging throughout ConPTY lifecycle
+- All 141 tests passing
+
+### Documentation
+- Full README rewrite — accurate architecture, build instructions, test commands
+- BUILD.md updated with troubleshooting section
+- CONTRIBUTING.md updated with pytest commands and project structure
+- requirements.txt updated with minimum version pins
+
+---
+
 ## v2.0.0 — Session 7 (2026-07-21)
 
 ### ConPTY Backend (major)

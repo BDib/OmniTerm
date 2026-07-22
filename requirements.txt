@@ -1,4 +1,4 @@
-PyQt6
-toml
-paramiko
-pyserial
+PyQt6>=6.7
+toml>=0.10
+paramiko>=3.0
+pyserial>=3.5

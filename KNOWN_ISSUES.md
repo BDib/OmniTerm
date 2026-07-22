@@ -13,7 +13,7 @@
 - **Ctrl+C behavior** — In the input area, Ctrl+C is intercepted by the Copy shortcut. In the output area, it copies selected text. SIGINT (Ctrl+C to shell) works when focus is on the output area.
 
 ### Platform
-- **Windows only** — Uses winpty and Windows-specific APIs (ShellExecuteW, IsUserAnAdmin). Not portable to Linux/macOS.
+- **Windows only** — Uses ConPTY and Windows-specific APIs (ShellExecuteW, IsUserAnAdmin). Not portable to Linux/macOS.
 - **Nuitka on CI** — Nuitka compilation fails on GitHub Actions due to MSVC linker issues with the CI environment. Nuitka builds are only available locally via `.\build.ps1 nuitka`.
 
 ### Profiles

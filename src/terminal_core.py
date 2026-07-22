@@ -6,6 +6,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 log = logging.getLogger(__name__)
 _err_log = None
 
+
 def _elog(msg: str):
     global _err_log
     if _err_log is None:
@@ -19,6 +20,7 @@ def _elog(msg: str):
         _err_log.flush()
     except Exception:
         pass
+
 
 def _elog_exc(msg: str, exc: Exception):
     _elog(f"{msg}: {exc}")
@@ -44,7 +46,7 @@ class TerminalEngine:
         self._cmd = "cmd.exe"
         self._reader_thread: threading.Thread | None = None
         self._writer_thread: threading.Thread | None = None
-        self._backend: str = "none"  # "conpty", "winpty", "pipe"
+        self._conpty = None
 
     def start(self, cmd: str = "cmd.exe", admin: bool = False) -> bool:
         self._cmd = cmd
@@ -53,53 +55,31 @@ class TerminalEngine:
         _elog(f"Starting: cmd={cmd!r}, admin={admin}")
         if admin:
             return self._start_elevated(cmd)
-        # Try ConPTY first, fall back to winpty
-        for backend_name, launcher in [("conpty", self._start_conpty), ("winpty", self._start_winpty)]:
-            try:
-                if launcher(cmd):
-                    self._backend = backend_name
-                    _elog(f"Using backend: {backend_name}")
-                    return True
-            except Exception as exc:
-                _elog(f"{backend_name} failed: {exc}")
-        _elog("All backends failed")
-        self.alive = False
-        self.is_ready = False
-        self.signals.exited.emit("[ERROR: No PTY backend available]")
-        return False
+        return self._start_conpty(cmd)
 
     def _start_conpty(self, cmd: str) -> bool:
-        """Try ConPTY via ctypes."""
+        """Start a ConPTY session."""
         try:
             from conpty import ConPTYEngine
             self._conpty = ConPTYEngine()
             if not self._conpty.start(cmd):
+                _elog("ConPTYEngine.start() returned False")
                 return False
             self.alive = True
             self.is_ready = True
             self._conpty.text_ready.connect(self.signals.text_ready.emit)
             self._conpty.exited.connect(self._on_conpty_exit)
+            _elog("ConPTY started OK")
             return True
         except Exception as exc:
-            _elog(f"ConPTY error: {exc}")
+            _elog_exc("ConPTY failed", exc)
             return False
 
     def _on_conpty_exit(self, msg: str):
+        _elog(f"ConPTY exit: {msg}")
         self.alive = False
         self.is_ready = False
         self.signals.exited.emit(msg)
-
-    def _start_winpty(self, cmd: str) -> bool:
-        """Fall back to winpty."""
-        from winpty import PtyProcess
-        self.pty = PtyProcess.spawn(cmd)
-        self.alive = True
-        self.is_ready = False
-        self._reader_thread = threading.Thread(target=self._read_loop, daemon=True, name="pty-reader")
-        self._writer_thread = threading.Thread(target=self._write_loop, daemon=True, name="pty-writer")
-        self._reader_thread.start()
-        self._writer_thread.start()
-        return True
 
     def _start_elevated(self, cmd: str) -> bool:
         import ctypes, shlex
@@ -125,44 +105,6 @@ class TerminalEngine:
             time.sleep(1)
         self.is_ready = False
         self.signals.exited.emit("[Admin session ended]")
-
-    def _read_loop(self):
-        time.sleep(0.5)
-        self.is_ready = True
-        _elog("Reader started")
-        while self.alive:
-            try:
-                if self.pty:
-                    text = self.pty.read(1024)
-                    if text:
-                        if isinstance(text, bytes):
-                            text = text.decode("utf-8", errors="replace")
-                        self.signals.text_ready.emit(text)
-            except EOFError:
-                _elog("PTY EOF")
-                break
-            except Exception as exc:
-                _elog_exc("Reader error", exc)
-                break
-            time.sleep(0.01)
-        self.alive = False
-        self.is_ready = False
-        self.signals.exited.emit("[Process exited]")
-
-    def _write_loop(self):
-        while self.alive:
-            try:
-                data = self.input_queue.get(timeout=0.1)
-                if data is None:
-                    break
-                if self.pty and self.alive:
-                    self.pty.write(data)
-                self.input_queue.task_done()
-            except queue.Empty:
-                continue
-            except Exception as exc:
-                _elog_exc("Writer error", exc)
-                break
 
     def start_ssh(self, host: str, port: int = 22, username: str = "",
                   password: str | None = None, key_filename: str | None = None) -> bool:
@@ -263,15 +205,9 @@ class TerminalEngine:
         self.alive = False
         self.is_ready = False
         self.input_queue.put(None)
-        if hasattr(self, "_conpty") and self._conpty:
+        if self._conpty:
             self._conpty.kill()
-        if self.pty:
-            try:
-                self.pty.terminate()
-                self.pty.close()
-            except Exception:
-                pass
-            self.pty = None
+            self._conpty = None
         if self.ssh:
             try:
                 self.ssh.close()
@@ -287,13 +223,13 @@ class TerminalEngine:
 
     @property
     def is_alive(self) -> bool:
-        if hasattr(self, "_conpty") and self._conpty:
+        if self._conpty:
             return self._conpty.alive
         if self.ssh:
             return self.alive and self.ssh.is_connected
         if self.serial:
             return self.alive and self.serial.is_connected
-        return self.alive and self.pty is not None and self.pty.isalive()
+        return self.alive
 
     @property
     def is_ssh(self) -> bool:

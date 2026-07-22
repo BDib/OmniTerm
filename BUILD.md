@@ -28,9 +28,8 @@ build.bat
 | | Nuitka | PyInstaller |
 |---|---|---|
 | **Startup** | ~13ms | ~97ms |
-| **Size** | ~19 MB | ~44 MB |
-| **Build time** | ~5 min (first run) | ~30s |
-| **Compatibility** | Excellent | Excellent |
+| **Size** | ~25 MB | ~44 MB |
+| **Build time** | ~5-10 min (first run) | ~30s |
 | **Default** | Yes | Fallback |
 
 Nuitka compiles Python to C before packaging, eliminating the Python interpreter startup overhead. First build is slow due to C compilation, but subsequent builds use cached artifacts.
@@ -39,7 +38,7 @@ Nuitka compiles Python to C before packaging, eliminating the Python interpreter
 
 | File | Builder | Description |
 |------|---------|-------------|
-| `dist\OmniTerm.exe` | Nuitka | Standalone executable |
+| `dist\OmniTerm-win10-x64.exe` | Nuitka | Standalone executable |
 | `dist\pyOmniTerm-win10-x64.exe` | PyInstaller | Standalone executable |
 | `installer_output\OmniTermSetup-win10-x64.exe` | Inno Setup | Windows installer |
 
@@ -66,7 +65,7 @@ The project includes an Inno Setup script (`installer\omniterm.iss`) for creatin
 ## CI/CD
 
 GitHub Actions automatically:
-1. Tests on Python 3.10–3.13
+1. Tests on Python 3.10-3.13
 2. Builds with PyInstaller on tag push
 3. Creates Inno Setup installer
 4. Publishes release to GitHub with win10/11 x64 binaries
@@ -76,7 +75,8 @@ GitHub Actions automatically:
 ### Nuitka build fails
 - Ensure Visual Studio Build Tools are installed (`cl.exe` must be available)
 - Nuitka requires MSVC on Windows
-- First build takes ~5 minutes due to C compilation
+- First build takes ~5-10 minutes due to C compilation
+- Clean temp files: `Remove-Item -Recur -Force C:\Temp\nbuild`
 
 ### PyInstaller build fails
 - Run `pip install pyinstaller` first
@@ -85,3 +85,7 @@ GitHub Actions automatically:
 ### Installer build fails
 - Install Inno Setup 6 from https://jrsoftware.org/isinfo.php
 - Ensure Inno Setup is in the default install path
+
+### Terminal crashes after 5 seconds (Nuitka only)
+- This was fixed in v2.1.0. The issue was `STARTUPINFOEXW` vs `STARTUPINFOW` in the ConPTY startup code.
+- If you still see this, ensure you're running the latest build.
