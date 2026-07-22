@@ -4,13 +4,13 @@
 
 ### Terminal Emulation
 - **Append-only output model** — QTextEdit is not a grid terminal. Cursor movement, line overwrite, and alternate screen buffer are not fully supported. Output is rendered linearly.
-- **CR+line overwrite** — Shell line redraws (e.g., Up arrow history) may show duplicated text because CR cannot overwrite in the append-only model.
+- **CR+line overwrite** — Shell line redraws may show duplicated text because CR cannot overwrite in the append-only model.
 - **PowerShell PSReadLine** — PSReadLine's live syntax highlighting uses cursor positioning that doesn't work perfectly in the append-only model. The `-NoProfile` flag is used to disable it.
 - **Scrollback** — Scrollback buffer is implemented but not wired into the rendering pipeline.
 
 ### Input
-- **Tab completion** — Tab is forwarded to the shell, but the completion result may not render correctly due to cursor positioning limitations.
-- **Ctrl+C behavior** — In the input area, Ctrl+C is intercepted by the Copy shortcut. In the output area, it copies selected text. SIGINT (Ctrl+C to shell) works when focus is on the output area.
+- **Arrow keys** — Handled by QTextEdit for cursor movement in the input area. Command history is not forwarded to the shell (cmd.exe handles its own line editing).
+- **Tab completion** — Tab is forwarded to the shell for completion, but the completion result may not render correctly due to cursor positioning limitations.
 
 ### Platform
 - **Windows only** — Uses ConPTY and Windows-specific APIs (ShellExecuteW, IsUserAnAdmin). Not portable to Linux/macOS.

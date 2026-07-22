@@ -83,12 +83,13 @@ All tests must pass before submitting a PR. Tests run on Python 3.10-3.13 via Gi
 
 ## Architecture Notes
 
-- **ConPTY backend** (`conpty.py`) — Windows Pseudo Console API via ctypes
+- **ConPTY backend** (`conpty.py`) — Windows Pseudo Console API via ctypes, uses two separate pipes (input + output) to prevent echo loops
 - **TerminalWidget** uses a QWidget with QTextEdit (output) + QTextEdit (input)
 - Output is append-only — the shell handles all cursor movement and line editing
 - ANSI parsing happens in `ansi_parser.py`, rendering in `ansi_renderer.py`
 - The engine (`terminal_core.py`) manages ConPTY/SSH/Serial sessions with threaded I/O
 - Configuration is in `settings.toml`, loaded by `config.py`
+- 143 tests across 12 test suites, run with `python -m pytest tests/`
 
 ## Reporting Issues
 
