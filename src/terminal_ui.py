@@ -431,11 +431,22 @@ class TerminalWidget(QWidget):
 
     @pyqtSlot(str)
     def show_exit_message(self, text: str):
-        cursor = self._output.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        cursor.insertText(f"\n{text}\n")
-        self._output.setTextCursor(cursor)
-        self._output.ensureCursorVisible()
+        try:
+            cursor = self._output.textCursor()
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            cursor.insertText(f"\n{text}\n")
+            self._output.setTextCursor(cursor)
+            self._output.ensureCursorVisible()
+        except Exception as exc:
+            import traceback, os, sys
+            try:
+                d = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
+                with open(os.path.join(d, "errors.txt"), "a", encoding="utf-8") as f:
+                    f.write(f"\n=== show_exit_message crash ===\n")
+                    traceback.print_exception(type(exc), exc, exc.__traceback__, file=f)
+                    f.write("\n")
+            except Exception:
+                pass
 
     # ── Save / Export ────────────────────────────────────────────────
 
@@ -444,9 +455,11 @@ class TerminalWidget(QWidget):
         from datetime import datetime
         theme = self._theme
         html = self._output.toHtml()
-        # Wrap in a themed HTML document
+        # Check RTL direction
+        is_rtl = self._output.layoutDirection() == Qt.LayoutDirection.RightToLeft
+        dir_attr = ' dir="rtl"' if is_rtl else ''
         styled_html = f"""<!DOCTYPE html>
-<html>
+<html{dir_attr}>
 <head>
 <meta charset="utf-8">
 <title>OmniTerm Export — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</title>
@@ -460,6 +473,8 @@ body {{
     margin: 0;
     white-space: pre-wrap;
     word-wrap: break-word;
+    direction: {"rtl" if is_rtl else "ltr"};
+    text-align: {"right" if is_rtl else "left"};
 }}
 </style>
 </head>
@@ -941,20 +956,31 @@ class MainWindow(QMainWindow):
             self.close()
             return
 
-        engine = self._tab_engines.pop(index, None)
-        widget = self._tabs.widget(index)
+        try:
+            engine = self._tab_engines.pop(index, None)
+            widget = self._tabs.widget(index)
 
-        if engine:
+            if engine:
+                try:
+                    engine.signals.exited.disconnect()
+                    engine.signals.text_ready.disconnect()
+                except (RuntimeError, TypeError):
+                    pass
+                engine.kill()
+
+            self._tabs.removeTab(index)
+            if widget:
+                widget.deleteLater()
+        except Exception as exc:
+            import traceback, os, sys
             try:
-                engine.signals.exited.disconnect()
-                engine.signals.text_ready.disconnect()
-            except (RuntimeError, TypeError):
+                d = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
+                with open(os.path.join(d, "errors.txt"), "a", encoding="utf-8") as f:
+                    f.write(f"\n=== _close_tab crash (index={index}) ===\n")
+                    traceback.print_exception(type(exc), exc, exc.__traceback__, file=f)
+                    f.write("\n")
+            except Exception:
                 pass
-            engine.kill()
-
-        self._tabs.removeTab(index)
-        if widget:
-            widget.deleteLater()
 
     def _close_current_tab(self) -> None:
         idx = self._tabs.currentIndex()
@@ -1011,9 +1037,20 @@ class MainWindow(QMainWindow):
         """Close the tab when the shell process exits."""
         if self._closing:
             return
-        idx = self._tabs.indexOf(terminal)
-        if idx >= 0:
-            self._close_tab(idx)
+        try:
+            idx = self._tabs.indexOf(terminal)
+            if idx >= 0:
+                self._close_tab(idx)
+        except Exception as exc:
+            import traceback, os, sys
+            try:
+                d = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
+                with open(os.path.join(d, "errors.txt"), "a", encoding="utf-8") as f:
+                    f.write(f"\n=== _on_tab_process_exited crash ===\n")
+                    traceback.print_exception(type(exc), exc, exc.__traceback__, file=f)
+                    f.write("\n")
+            except Exception:
+                pass
 
     @staticmethod
     def _shell_title(shell: str) -> str:
@@ -1257,10 +1294,22 @@ class MainWindow(QMainWindow):
             self.restoreState(state)
 
     def closeEvent(self, event):
-        self._closing = True
-        self.kill_all_engines()
-        self._settings.setValue("window/geometry", self.saveGeometry())
-        self._settings.setValue("window/state", self.saveState())
+        import traceback, os, sys
+        try:
+            self._closing = True
+            self.kill_all_engines()
+            self._settings.setValue("window/geometry", self.saveGeometry())
+            self._settings.setValue("window/state", self.saveState())
+        except Exception as exc:
+            # Log crash to errors.txt
+            try:
+                d = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
+                with open(os.path.join(d, "errors.txt"), "a", encoding="utf-8") as f:
+                    f.write(f"\n=== closeEvent crash ===\n")
+                    traceback.print_exception(type(exc), exc, exc.__traceback__, file=f)
+                    f.write("\n")
+            except Exception:
+                pass
         super().closeEvent(event)
 
     def showEvent(self, event):
@@ -1271,9 +1320,20 @@ class MainWindow(QMainWindow):
 
     def kill_all_engines(self) -> None:
         """Kill all tab engines. Called on window close."""
-        for engine in list(self._tab_engines.values()):
+        try:
+            for engine in list(self._tab_engines.values()):
+                try:
+                    engine.kill()
+                except Exception:
+                    pass
+            self._tab_engines.clear()
+        except Exception as exc:
+            import traceback, os, sys
             try:
-                engine.kill()
+                d = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
+                with open(os.path.join(d, "errors.txt"), "a", encoding="utf-8") as f:
+                    f.write(f"\n=== kill_all_engines crash ===\n")
+                    traceback.print_exception(type(exc), exc, exc.__traceback__, file=f)
+                    f.write("\n")
             except Exception:
                 pass
-        self._tab_engines.clear()

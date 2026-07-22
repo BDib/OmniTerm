@@ -167,6 +167,69 @@ def test_theme_applies():
     print("  PASS: Theme applies")
 
 
+# ── RTL alignment ───────────────────────────────────────────────────
+
+
+def test_rtl_toggle_alignment():
+    """RTL toggle should set proper alignment on output blocks."""
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtGui import QTextCursor
+    w, engine, app = _make_widget()
+    w.append_shell_text("Hello World")
+    cursor = w._output.textCursor()
+    cursor.select(QTextCursor.SelectionType.Document)
+    block_fmt = cursor.blockFormat()
+    block_fmt.setAlignment(Qt.AlignmentFlag.AlignRight)
+    cursor.setBlockFormat(block_fmt)
+    w._output.setTextCursor(cursor)
+    # Verify alignment
+    cursor = w._output.textCursor()
+    cursor.movePosition(QTextCursor.MoveOperation.Start)
+    block_fmt = cursor.blockFormat()
+    assert block_fmt.alignment() == Qt.AlignmentFlag.AlignRight, \
+        f"Expected AlignRight, got {block_fmt.alignment()}"
+    print("  PASS: RTL toggle sets alignment")
+
+
+# ── Save / Export ───────────────────────────────────────────────────
+
+
+def test_save_output_text():
+    """Save as text should write plain text to file."""
+    import tempfile, os
+    w, engine, app = _make_widget()
+    w.append_shell_text("Test output\n")
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        tmppath = f.name
+    try:
+        w.save_output_text(tmppath)
+        with open(tmppath, 'r') as f:
+            content = f.read()
+        assert "Test output" in content, f"Expected 'Test output' in file, got: {content}"
+        print("  PASS: Save as text works")
+    finally:
+        os.unlink(tmppath)
+
+
+def test_save_output_html():
+    """Save as HTML should write themed HTML to file."""
+    import tempfile, os
+    w, engine, app = _make_widget()
+    w.append_shell_text("HTML test\n")
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+        tmppath = f.name
+    try:
+        w.save_output_html(tmppath)
+        with open(tmppath, 'r') as f:
+            content = f.read()
+        assert "<!DOCTYPE html>" in content, "Expected DOCTYPE in HTML"
+        assert "background-color:" in content, "Expected theme colors in HTML"
+        assert "HTML test" in content, f"Expected content in HTML"
+        print("  PASS: Save as HTML works")
+    finally:
+        os.unlink(tmppath)
+
+
 def run_all():
     print("Running unified keyboard input tests...")
     print()
@@ -184,6 +247,13 @@ def run_all():
     print()
     print("  Theme:")
     test_theme_applies()
+    print()
+    print("  RTL:")
+    test_rtl_toggle_alignment()
+    print()
+    print("  Save/Export:")
+    test_save_output_text()
+    test_save_output_html()
     print()
     print("All unified input tests passed!\n")
 
