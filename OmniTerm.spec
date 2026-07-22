@@ -23,7 +23,7 @@ pyz = PYZ(a.pure, a.zipped_data)
 
 exe = EXE(
     pyz, a.scripts, a.binaries, a.zipfiles, a.datas, [],
-    name="pyOmniTerm-win10-x64",
+    name="OmniTerm-windows-x64",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

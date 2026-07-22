@@ -7,14 +7,15 @@ import subprocess
 
 
 def test_conpty_spawn():
-    """ConPTY should spawn cmd.exe and execute a command."""
+    """ConPTY should spawn shell and execute a command."""
     log_file = "test_pty_output.log"
     if os.path.exists(log_file):
         os.remove(log_file)
 
     # Use subprocess with pipes as a basic PTY smoke test
+    shell = "cmd.exe" if os.name == "nt" else "/bin/sh"
     proc = subprocess.Popen(
-        ["cmd.exe"],
+        [shell],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -22,7 +23,8 @@ def test_conpty_spawn():
     )
 
     try:
-        proc.stdin.write(f"echo worked > {log_file}\r\n")
+        cmd_str = f"echo worked > {log_file}\r\n" if os.name == "nt" else f"echo worked > {log_file}\n"
+        proc.stdin.write(cmd_str)
         proc.stdin.flush()
         time.sleep(2)
 

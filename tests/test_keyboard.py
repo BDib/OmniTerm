@@ -1,7 +1,5 @@
 """
-Unit tests for keyboard input handling.
-
-Tests the QTextEdit-based input and shell output rendering.
+Unit tests for keyboard input handling under the unified single QTextEdit terminal screen.
 """
 
 import sys
@@ -43,53 +41,76 @@ def _all(engine):
     return "".join(engine.written)
 
 
-def _send(w, app, key, text="", modifiers=None):
+def _send_key(w, app, key, text="", modifiers=None):
     from PyQt6.QtGui import QKeyEvent
     from PyQt6.QtCore import QEvent, Qt
     if modifiers is None:
         modifiers = Qt.KeyboardModifier.NoModifier
     event = QKeyEvent(QEvent.Type.KeyPress, key, modifiers, text)
-    app.sendEvent(w, event)
+    app.sendEvent(w._output, event)
 
 
-# ── Input via QTextEdit ──────────────────────────────────────────────
+# ── Unified Key Handling Tests ─────────────────────────────────────────
 
 
 def test_type_and_enter():
-    """Typing in input + Enter sends the command."""
+    """Typing printable characters and pressing Enter writes them to the engine."""
     w, engine, app = _make_widget()
-    w._set_input_text("dir")
-    w._on_enter()
-    assert "dir" in _all(engine), f"Expected 'dir' in output, got: {engine.written}"
-    assert w._input_text() == "", "Input should be cleared"
-    print("  PASS: Type + Enter sends command")
+    # Simulate typing 'd', 'i', 'r'
+    _send_key(w, app, 0, "d")
+    _send_key(w, app, 0, "i")
+    _send_key(w, app, 0, "r")
+    # Simulate pressing Enter
+    from PyQt6.QtCore import Qt
+    _send_key(w, app, Qt.Key.Key_Return, "\r")
+
+    assert "dir\r" in _all(engine), f"Expected 'dir\\r' written, got: {engine.written}"
+    print("  PASS: Typing + Enter forwards keys to engine")
 
 
-def test_enter_empty():
-    """Enter with empty input sends just \\r."""
+def test_special_keys_mapped():
+    """Special keys are mapped to correct VT sequence standards."""
+    from PyQt6.QtCore import Qt
     w, engine, app = _make_widget()
-    w._set_input_text("")
-    w._on_enter()
-    assert _last(engine) == "\r", f"Empty Enter should send \\r, got: {_last(engine)!r}"
-    print("  PASS: Empty Enter sends \\r")
+
+    _send_key(w, app, Qt.Key.Key_Backspace, "\x7f")
+    assert _last(engine) == "\x7f", f"Backspace should map to \\x7f, got: {_last(engine)!r}"
+
+    _send_key(w, app, Qt.Key.Key_Up, "")
+    assert _last(engine) == "\x1b[A", f"Up Arrow should map to \\x1b[A, got: {_last(engine)!r}"
+
+    _send_key(w, app, Qt.Key.Key_Down, "")
+    assert _last(engine) == "\x1b[B", f"Down Arrow should map to \\x1b[B, got: {_last(engine)!r}"
+
+    _send_key(w, app, Qt.Key.Key_Left, "")
+    assert _last(engine) == "\x1b[D", f"Left Arrow should map to \\x1b[D, got: {_last(engine)!r}"
+
+    _send_key(w, app, Qt.Key.Key_Right, "")
+    assert _last(engine) == "\x1b[C", f"Right Arrow should map to \\x1b[C, got: {_last(engine)!r}"
+    print("  PASS: Special keys mapped to proper ANSI sequences")
 
 
-def test_command_sent_to_engine():
-    """After Enter, the command should be sent to the engine."""
+def test_ctrl_combos_mapped():
+    """Ctrl keyboard combos are mapped correctly."""
+    from PyQt6.QtCore import Qt
     w, engine, app = _make_widget()
-    w._set_input_text("echo hello")
-    w._on_enter()
-    assert "echo hello" in _all(engine), f"Command should be sent: {engine.written}"
-    print("  PASS: Command sent to engine")
+
+    # Ctrl+C
+    _send_key(w, app, Qt.Key.Key_C, "", Qt.KeyboardModifier.ControlModifier)
+    assert _last(engine) == "\x03"
+
+    # Ctrl+L
+    _send_key(w, app, Qt.Key.Key_L, "", Qt.KeyboardModifier.ControlModifier)
+    assert _last(engine) == "\x0c"
+    print("  PASS: Ctrl combinations mapped correctly")
 
 
 def test_engine_not_ready():
-    """Enter when engine not ready should not send."""
+    """Keys are ignored if the process engine is not ready."""
     w, engine, app = _make_widget()
     engine.is_ready = False
-    w._set_input_text("dir")
-    w._on_enter()
-    assert len(engine.written) == 0, "Should not send when engine not ready"
+    _send_key(w, app, 0, "a")
+    assert len(engine.written) == 0, "Keys must not be sent if engine is not ready"
     print("  PASS: Engine not ready blocks send")
 
 
@@ -124,108 +145,47 @@ def test_ansi_colors():
     print("  PASS: ANSI colors handled")
 
 
-# ── Input QTextEdit features ────────────────────────────────────────
-
-
-def test_input_cursor_visible():
-    """Input QTextEdit should have a visible cursor."""
-    w, engine, app = _make_widget()
-    w._set_input_text("hello")
-    assert w._input_text() == "hello", "Text should be set"
-    print("  PASS: Input text is settable")
-
-
-def test_input_editing():
-    """Input QTextEdit supports text editing."""
-    w, engine, app = _make_widget()
-    w._set_input_text("hello")
-    assert w._input_text() == "hello"
-    # Clear and set new text
-    w._clear_input()
-    assert w._input_text() == ""
-    w._set_input_text("world")
-    assert w._input_text() == "world"
-    print("  PASS: Input editing works")
-
-
-def test_focus_on_input():
-    """setFocus should target the input field."""
+def test_focus_on_screen():
+    """setFocus should target the unified terminal screen."""
     w, engine, app = _make_widget()
     w.show()
     app.processEvents()
     w.setFocus()
     app.processEvents()
-    assert w._input.hasFocus(), "Input should have focus"
-    print("  PASS: Focus goes to input")
-
-
-# ── History (handled by QTextEdit, not forwarded) ─────────────────
-
-
-def test_history_not_forwarded():
-    """Up/Down arrows should NOT be forwarded to shell (cmd.exe handles natively)."""
-    from PyQt6.QtCore import Qt
-    w, engine, app = _make_widget()
-    # Send Up arrow — should NOT be forwarded to shell
-    _send(w._input, app, Qt.Key.Key_Up)
-    assert _last(engine) is None, f"Up should not be forwarded, got {_last(engine)!r}"
-    # Send Down arrow — should NOT be forwarded to shell
-    _send(w._input, app, Qt.Key.Key_Down)
-    assert _last(engine) is None, f"Down should not be forwarded, got {_last(engine)!r}"
-    print("  PASS: Arrow keys not forwarded (QTextEdit handles them)")
+    assert w._output.hasFocus(), "Unified terminal screen should have focus"
+    print("  PASS: Focus goes to terminal screen")
 
 
 # ── Theme ────────────────────────────────────────────────────────────
 
 
 def test_theme_applies():
-    """Theme should be applied to output, input, and path label."""
+    """Theme should be applied to the output."""
     w, engine, app = _make_widget()
     w.apply_theme_by_name("dracula")
     assert w._cfg.ui.theme == "dracula"
     print("  PASS: Theme applies")
 
 
-# ── Path label ───────────────────────────────────────────────────────
-
-
-def test_path_label_exists():
-    """Path label should be present and have text."""
-    w, engine, app = _make_widget()
-    assert hasattr(w, '_path_label'), "Should have path label"
-    assert w._path_label.text() != "", "Path label should have text"
-    print("  PASS: Path label exists")
-
-
 def run_all():
-    print("Running keyboard input tests...")
+    print("Running unified keyboard input tests...")
     print()
-    print("  Input:")
+    print("  Input Handling:")
     test_type_and_enter()
-    test_enter_empty()
-    test_command_sent_to_engine()
+    test_special_keys_mapped()
+    test_ctrl_combos_mapped()
     test_engine_not_ready()
     print()
-    print("  Output:")
+    print("  Output rendering:")
     test_shell_output_rendered()
     test_erase_display()
     test_ansi_colors()
-    print()
-    print("  Input QTextEdit:")
-    test_input_cursor_visible()
-    test_input_editing()
-    test_focus_on_input()
-    print()
-    print("  History:")
-    test_history_not_forwarded()
+    test_focus_on_screen()
     print()
     print("  Theme:")
     test_theme_applies()
     print()
-    print("  Path label:")
-    test_path_label_exists()
-    print()
-    print("All keyboard input tests passed!\n")
+    print("All unified input tests passed!\n")
 
 
 if __name__ == "__main__":

@@ -1,4 +1,7 @@
-
+# -*- coding: utf-8 -*-
+import os
+import sys
+import logging
 from PyQt6.QtWidgets import (
     QMainWindow, QTextEdit, QApplication, QInputDialog,
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
@@ -11,6 +14,7 @@ from PyQt6.QtGui import (
     QShortcut,
     QMouseEvent,
     QTextOption,
+    QColor,
 )
 
 from themes import get_theme, list_themes
@@ -22,7 +26,7 @@ from ssh_dialog import SSHDialog
 from serial_dialog import SerialDialog
 from profile_picker import ProfilePickerDialog
 from wsl_manager import WSLManager
-
+from i18n import t
 
 # ─── Cursor style mapping ─────────────────────────────────────────────────
 
@@ -32,14 +36,63 @@ _CURSOR_WIDTHS = {
     "underline": 0,
 }
 
+# ─── Custom QTextEdit that intercepts keyboard & mouse for PTY ─────────────
 
-# ─── Terminal Widget ───────────────────────────────────────────────────────
+class TerminalScreen(QTextEdit):
+    """Interactive output screen that forwards all keys and mouse events to the shell."""
+
+    def __init__(self, parent=None, term_widget=None):
+        super().__init__(parent)
+        self.term_widget = term_widget
+        self.setReadOnly(False)
+        self.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse |
+            Qt.TextInteractionFlag.TextSelectableByKeyboard |
+            Qt.TextInteractionFlag.LinksAccessibleByMouse
+        )
+        self.setAcceptRichText(False)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.setWordWrapMode(QTextOption.WrapMode.WordWrap)
+
+    def keyPressEvent(self, event):
+        if self.term_widget:
+            self.term_widget.handle_key_event(event)
+        else:
+            super().keyPressEvent(event)
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if self.term_widget and self.term_widget._mouse.is_active:
+            self.term_widget.handle_mouse_press(event)
+        else:
+            super().mousePressEvent(event)
+            self.setFocus()
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if self.term_widget and self.term_widget._mouse.is_active:
+            self.term_widget.handle_mouse_release(event)
+        else:
+            super().mouseReleaseEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self.term_widget and self.term_widget._mouse.is_active:
+            self.term_widget.handle_mouse_move(event)
+        else:
+            super().mouseMoveEvent(event)
+
+    def wheelEvent(self, event):
+        if self.term_widget and self.term_widget._mouse.is_active:
+            self.term_widget.handle_wheel(event)
+        else:
+            super().wheelEvent(event)
+
+# ─── Terminal Widget (Unified QTextEdit) ──────────────────────────────────
 
 class TerminalWidget(QWidget):
-    """Terminal widget: read-only QTextEdit for output + QLineEdit for input.
+    """Terminal widget: a single unified interactive QTextEdit for input & output.
 
-    This avoids all QTextEdit key-handling issues by letting the shell handle
-    everything.  The QLineEdit provides a native, visible cursor and editing.
+    Handles key events natively by capturing, translating to ANSI, and sending
+    to the shell PTY, preventing default QTextEdit side-effects.
     """
 
     def __init__(self, parent=None, cfg=None, plain_mode=False):
@@ -50,57 +103,19 @@ class TerminalWidget(QWidget):
         self._mouse = MouseHandler()
         self._mouse_last_pos = QPoint()
         self._opaque = True
-
-        # ── Current path (detected from shell prompt) ──
-        self._current_path = ""
-        self._prompt_prefix = ""
+        self._auto_arabic = True
 
         # ── Layout ──
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Output (read-only QTextEdit)
-        self._output = QTextEdit()
-        self._output.setReadOnly(True)
-        self._output.setAcceptRichText(False)
-        self._output.setContextMenuPolicy(Qt.ContextMenuPolicy.NoContextMenu)
-        self._output.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
-        self._output.setWordWrapMode(QTextOption.WrapMode.WordWrap)
+        # Single interactive QTextEdit terminal screen
+        self._output = TerminalScreen(self, self)
         layout.addWidget(self._output, 1)
 
         # Search dialog (created on demand)
         self._search_dialog = None
-
-        # Separator line
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color: #444; max-height: 1px;")
-        layout.addWidget(sep)
-
-        # ── Input area: path label + QTextEdit ──
-        input_row = QHBoxLayout()
-        input_row.setContentsMargins(0, 0, 0, 0)
-        input_row.setSpacing(0)
-
-        self._path_label = QLabel("❯ ")
-        self._path_label.setStyleSheet("padding: 8px 4px 8px 10px; font-weight: bold;")
-        input_row.addWidget(self._path_label)
-
-        self._input = QTextEdit()
-        self._input.setAcceptRichText(False)
-        self._input.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._input.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self._input.setWordWrapMode(QTextOption.WrapMode.NoWrap)
-        self._input.setPlaceholderText("Type a command...")
-        self._input.setMinimumHeight(28)
-        self._input.setMaximumHeight(120)
-        self._input.setTabChangesFocus(True)
-        self._input.document().contentsChanged.connect(self._resize_input)
-        self._input.installEventFilter(self)
-        input_row.addWidget(self._input, 1)
-
-        layout.addLayout(input_row)
 
         # ── Theme ──
         self._theme = get_theme(cfg.ui.theme if cfg else "campbell")
@@ -109,100 +124,92 @@ class TerminalWidget(QWidget):
         # ── Shortcuts ──
         self._setup_shortcuts()
 
-        # Focus the input
-        self._input.setFocus()
+        # Focus the screen
+        self._output.setFocus()
 
-    def _resize_input(self):
-        """Auto-expand input QTextEdit based on content height."""
-        doc = self._input.document()
-        doc_height = int(doc.size().height()) + 16
-        new_height = max(28, min(doc_height, 120))
-        if self._input.height() != new_height:
-            self._input.setMinimumHeight(new_height)
-            self._input.setMaximumHeight(new_height)
+    def _shape_arabic(self, text: str) -> str:
+        """Reshapes and applies bidi reordering on Arabic text dynamically."""
+        if not text:
+            return text
+        # If there are any Arabic characters, reshape and reorder
+        has_arabic = any(0x0600 <= ord(c) <= 0x06FF for c in text)
+        if has_arabic:
+            try:
+                import arabic_reshaper
+                from bidi.algorithm import get_display
+                reshaped = arabic_reshaper.reshape(text)
+                return get_display(reshaped)
+            except Exception:
+                pass
+        return text
 
-    # ── Send command ──────────────────────────────────────────────────
+    # ── Key handling ──────────────────────────────────────────────────
 
-    def eventFilter(self, obj, event):
-        """Intercept key events in the input QTextEdit.
-
-        Text entry is handled by QTextEdit natively.
-        Enter sends command, Tab is consumed to prevent focus change,
-        Ctrl combos are forwarded to the shell.
-        """
-        from PyQt6.QtCore import QEvent
-        if obj is self._input and event.type() == QEvent.Type.KeyPress:
-            key = event.key()
-            mods = event.modifiers()
-            ctrl = mods & Qt.KeyboardModifier.ControlModifier
-
-            # Enter sends command
-            if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
-                self._on_enter()
-                return True
-
-            # Tab — forward to shell, consume so focus doesn't jump
-            if key == Qt.Key.Key_Tab and self.parent_engine and self.parent_engine.is_ready:
-                self.parent_engine.write("\t")
-                return True
-
-            # Ctrl combos — forward to shell, consume
-            if ctrl and self.parent_engine and self.parent_engine.is_ready:
-                ctrl_map = {
-                    Qt.Key.Key_C: "\x03", Qt.Key.Key_D: "\x04",
-                    Qt.Key.Key_Z: "\x1a", Qt.Key.Key_L: "\x0c",
-                    Qt.Key.Key_A: "\x01", Qt.Key.Key_E: "\x05",
-                    Qt.Key.Key_K: "\x0b", Qt.Key.Key_U: "\x15",
-                    Qt.Key.Key_W: "\x17",
-                }
-                if key in ctrl_map:
-                    self.parent_engine.write(ctrl_map[key])
-                    return True
-
-            # Backspace — forward to shell
-            if key == Qt.Key.Key_Backspace and self.parent_engine and self.parent_engine.is_ready:
-                self.parent_engine.write("\x7f")
-                return True
-
-            # Delete — forward to shell
-            if key == Qt.Key.Key_Delete and self.parent_engine and self.parent_engine.is_ready:
-                self.parent_engine.write("\x1b[3~")
-                return True
-
-            # Escape — forward to shell
-            if key == Qt.Key.Key_Escape and self.parent_engine and self.parent_engine.is_ready:
-                self.parent_engine.write("\x1b")
-                return True
-
-            # Arrow keys, Home, End, PageUp/Down — let QTextEdit handle
-            # (forwarding VT sequences causes echo issues with cmd.exe)
-
-        return False  # let QTextEdit handle everything else
-
-    def _input_text(self) -> str:
-        """Get plain text from the input QTextEdit."""
-        return self._input.toPlainText()
-
-    def _set_input_text(self, text: str):
-        """Set plain text in the input QTextEdit."""
-        self._input.setPlainText(text)
-        # Move cursor to end
-        cursor = self._input.textCursor()
-        cursor.movePosition(QTextCursor.MoveOperation.End)
-        self._input.setTextCursor(cursor)
-
-    def _clear_input(self):
-        """Clear the input QTextEdit."""
-        self._input.clear()
-
-    def _on_enter(self):
-        """Send the current input line to the shell."""
-        cmd = self._input_text().strip()
-        self._clear_input()
+    def handle_key_event(self, event):
+        """Translate key press events into PTY sequences and write to shell."""
         if not self.parent_engine or not self.parent_engine.is_ready:
             return
-        # Send to shell
-        self.parent_engine.write(cmd + "\r")
+
+        key = event.key()
+        mods = event.modifiers()
+        ctrl = bool(mods & Qt.KeyboardModifier.ControlModifier)
+        shift = bool(mods & Qt.KeyboardModifier.ShiftModifier)
+        alt = bool(mods & Qt.KeyboardModifier.AltModifier)
+
+        # 1. Map Ctrl combos
+        if ctrl:
+            # Clipboard handling
+            if key == Qt.Key.Key_C:
+                cursor = self._output.textCursor()
+                if cursor.hasSelection():
+                    QApplication.clipboard().setText(cursor.selectedText())
+                    return
+                else:
+                    self.parent_engine.write("\x03")  # SIGINT
+                    return
+            elif key == Qt.Key.Key_V:
+                self._paste_clipboard()
+                return
+
+            ctrl_map = {
+                Qt.Key.Key_A: "\x01",
+                Qt.Key.Key_E: "\x05",
+                Qt.Key.Key_K: "\x0b",
+                Qt.Key.Key_U: "\x15",
+                Qt.Key.Key_W: "\x17",
+                Qt.Key.Key_L: "\x0c",
+                Qt.Key.Key_Z: "\x1a",
+                Qt.Key.Key_D: "\x04",
+            }
+            if key in ctrl_map:
+                self.parent_engine.write(ctrl_map[key])
+                return
+
+        # 2. Map special keys to ANSI VT sequences
+        key_map = {
+            Qt.Key.Key_Return: "\r",
+            Qt.Key.Key_Enter: "\r",
+            Qt.Key.Key_Tab: "\t",
+            Qt.Key.Key_Backspace: "\x7f",
+            Qt.Key.Key_Escape: "\x1b",
+            Qt.Key.Key_Delete: "\x1b[3~",
+            Qt.Key.Key_Up: "\x1b[A",
+            Qt.Key.Key_Down: "\x1b[B",
+            Qt.Key.Key_Right: "\x1b[C",
+            Qt.Key.Key_Left: "\x1b[D",
+            Qt.Key.Key_Home: "\x1b[H",
+            Qt.Key.Key_End: "\x1b[F",
+            Qt.Key.Key_PageUp: "\x1b[5~",
+            Qt.Key.Key_PageDown: "\x1b[6~",
+        }
+        if key in key_map:
+            self.parent_engine.write(key_map[key])
+            return
+
+        # 3. Map regular printable characters
+        text = event.text()
+        if text:
+            self.parent_engine.write(text)
 
     # ── Theme & Style ──────────────────────────────────────────────────
 
@@ -221,20 +228,6 @@ class TerminalWidget(QWidget):
             f"QTextEdit {{ background-color: {bg}; color: {fg}; "
             f"font-family: '{ff}', 'Consolas', monospace; font-size: {fs}px; "
             f"padding: 10px; border: none; "
-            f"selection-background-color: {sel_bg}; selection-color: {sel_fg}; }}"
-        )
-
-        # Path label
-        self._path_label.setStyleSheet(
-            f"QLabel {{ background-color: {bg}; color: {fg}; "
-            f"font-family: '{ff}', 'Consolas', monospace; font-size: {fs}px; "
-            f"padding: 8px 4px 8px 10px; font-weight: bold; border: none; }}")
-
-        # Input QTextEdit
-        self._input.setStyleSheet(
-            f"QTextEdit {{ background-color: {bg}; color: {fg}; "
-            f"font-family: '{ff}', 'Consolas', monospace; font-size: {fs}px; "
-            f"padding: 8px 10px; border: none; "
             f"selection-background-color: {sel_bg}; selection-color: {sel_fg}; }}"
         )
 
@@ -363,7 +356,9 @@ class TerminalWidget(QWidget):
 
         for span in spans:
             if span.kind == SpanKind.TEXT:
-                cursor.insertText(span.text,
+                # Apply dynamic Arabic shaping & bidi reordering if enabled
+                processed_text = self._shape_arabic(span.text) if self._auto_arabic else span.text
+                cursor.insertText(processed_text,
                     span_to_format(span.sgr, self._theme))
 
             elif span.kind == SpanKind.NEWLINE:
@@ -392,7 +387,7 @@ class TerminalWidget(QWidget):
                 cursor.insertText("    ")
 
             elif span.kind == SpanKind.BACKSPACE:
-                cursor.deleteChar()
+                cursor.deletePreviousChar()  # Corrected to delete character to the left
 
             elif span.kind == SpanKind.MOUSE_MODE:
                 parts = span.text.split(",")
@@ -412,38 +407,6 @@ class TerminalWidget(QWidget):
 
         self._output.setTextCursor(cursor)
         self._output.ensureCursorVisible()
-
-        # Detect prompt path from the raw text
-        self._detect_path(text)
-
-    def _detect_path(self, text: str):
-        """Extract current path from shell prompt in the output text.
-
-        Detects patterns like PS C:\\path>, C:\\path>, user@host:~/path$ etc.
-        """
-        import re
-        # Strip ANSI escapes for pattern matching
-        clean = strip_ansi(text)
-
-        # PowerShell / cmd: PS C:\path> or C:\path>
-        m = re.search(r'(?:PS\s+)?([A-Z]:\\[^\s>]*)(?:>|_)\s*$', clean)
-        if m:
-            self._current_path = m.group(1)
-            self._path_label.setText(f"❯ {self._current_path} ")
-            return
-
-        # Bash/WSL: user@host:~/path$ or /path$
-        m = re.search(r'(\S+:\S+)(?:\$|#)\s*$', clean)
-        if m:
-            self._current_path = m.group(1)
-            self._path_label.setText(f"❯ {self._current_path} ")
-            return
-
-        # Just a path ending with > or $
-        m = re.search(r'([/\\][^\s>]*)(?:>|$)\s*$', clean)
-        if m and len(m.group(1)) > 2:
-            self._current_path = m.group(1)
-            self._path_label.setText(f"❯ {self._current_path} ")
 
     def _handle_cursor_pos(self, cursor, row, col):
         """Move cursor to (row, col) and overwrite if moving backward."""
@@ -477,7 +440,7 @@ class TerminalWidget(QWidget):
     # ── Focus proxy ────────────────────────────────────────────────────
 
     def setFocus(self, reason=Qt.FocusReason.OtherFocusReason):
-        self._input.setFocus(reason)
+        self._output.setFocus(reason)
 
     # ── Copy / Paste ───────────────────────────────────────────────────
 
@@ -490,7 +453,9 @@ class TerminalWidget(QWidget):
         cb = QApplication.clipboard()
         text = cb.text()
         if text:
-            self._input.insertPlainText(text)
+            # Replace CRLF/LF with \r for raw terminal typing behavior
+            text = text.replace("\r\n", "\r").replace("\n", "\r")
+            self.parent_engine.write(text)
 
     # ── QTextEdit compat proxies (used by MainWindow) ─────────────────
 
@@ -515,9 +480,8 @@ class TerminalWidget(QWidget):
         cursor = self._output.cursorForPosition(pos)
         return cursor.positionInBlock() + 1, cursor.blockNumber() + 1
 
-    def mousePressEvent(self, event: QMouseEvent):
+    def handle_mouse_press(self, event: QMouseEvent):
         if not self._mouse.is_active or not self.parent_engine:
-            super().mousePressEvent(event)
             return
         col, row = self._pos_to_cell(event.position().toPoint())
         button_map = {
@@ -535,7 +499,7 @@ class TerminalWidget(QWidget):
         if seq and self.parent_engine.is_ready:
             self.parent_engine.write(seq)
 
-    def mouseReleaseEvent(self, event: QMouseEvent):
+    def handle_mouse_release(self, event: QMouseEvent):
         if not self._mouse.is_active or not self.parent_engine:
             return
         col, row = self._pos_to_cell(event.position().toPoint())
@@ -549,7 +513,7 @@ class TerminalWidget(QWidget):
         if seq and self.parent_engine.is_ready:
             self.parent_engine.write(seq)
 
-    def mouseMoveEvent(self, event: QMouseEvent):
+    def handle_mouse_move(self, event: QMouseEvent):
         if not self._mouse.is_active or not self.parent_engine:
             return
         col, row = self._pos_to_cell(event.position().toPoint())
@@ -560,7 +524,7 @@ class TerminalWidget(QWidget):
         if seq and self.parent_engine.is_ready:
             self.parent_engine.write(seq)
 
-    def wheelEvent(self, event: QMouseEvent):
+    def handle_wheel(self, event):
         if not self._mouse.is_active or not self.parent_engine:
             # Scroll the output widget instead
             delta = event.angleDelta().y()
@@ -585,7 +549,7 @@ class MainWindow(QMainWindow):
     Each tab contains its own TerminalWidget + TerminalEngine.
     """
 
-    def __init__(self, cfg=None, plain_mode=False, shell=None):
+    def __init__(self, cfg=None, plain_mode=False, shell=None, cwd=None):
         super().__init__()
         self._cfg = cfg
         self._plain_mode = plain_mode
@@ -636,9 +600,12 @@ class MainWindow(QMainWindow):
 
         # ── Open first tab ──
         if shell:
-            self.new_tab(shell=shell)
+            self.new_tab(shell=shell, cwd=cwd)
         else:
-            self.new_tab()
+            self.new_tab(cwd=cwd)
+
+        # Load initial UI Language and apply translation
+        self._update_ui_language()
 
     @staticmethod
     def _check_admin() -> bool:
@@ -670,7 +637,7 @@ class MainWindow(QMainWindow):
                 action.triggered.connect(
                     lambda checked=False, n=name: self._open_profile_tab(n))
         menu.addSeparator()
-        action = menu.addAction("Manage Profiles...")
+        action = menu.addAction(t("menu_manage_profiles", self._cfg.ui.language if self._cfg else "en"))
         action.triggered.connect(self._manage_profiles)
         menu.exec(self._add_btn.mapToGlobal(self._add_btn.rect().bottomLeft()))
 
@@ -752,72 +719,129 @@ class MainWindow(QMainWindow):
                 a.setShortcut(QKeySequence(shortcut))
             return a
 
-        # ── File ──
-        file_menu = menu.addMenu("&File")
-        _act(file_menu, "New &Tab", self.new_tab, "Ctrl+T")
-        _act(file_menu, "&Close Tab", self._close_current_tab, "Ctrl+W")
-        file_menu.addSeparator()
-        _act(file_menu, "&Profile Picker...", self._profile_picker, "Ctrl+Shift+N")
-        _act(file_menu, "&Manage Profiles...", self._manage_profiles)
-        file_menu.addSeparator()
-        _act(file_menu, "E&xit", self.close, "Alt+F4")
+        # We construct all menus and actions, keeping references so they can be dynamically translated
+        self._file_menu = menu.addMenu("")
+        self._action_new_tab = _act(self._file_menu, "", self.new_tab, "Ctrl+T")
+        self._action_close_tab = _act(self._file_menu, "", self._close_current_tab, "Ctrl+W")
+        self._file_menu.addSeparator()
+        self._action_profile_picker = _act(self._file_menu, "", self._profile_picker, "Ctrl+Shift+N")
+        self._action_manage_profiles = _act(self._file_menu, "", self._manage_profiles)
+        self._file_menu.addSeparator()
+        self._action_exit = _act(self._file_menu, "", self.close, "Alt+F4")
 
-        # ── Edit ──
-        edit_menu = menu.addMenu("&Edit")
-        _act(edit_menu, "&Copy", self._menu_copy, QKeySequence.StandardKey.Copy)
-        _act(edit_menu, "Cu&t", self._menu_cut, QKeySequence.StandardKey.Cut)
-        _act(edit_menu, "&Paste", self._menu_paste, QKeySequence.StandardKey.Paste)
-        edit_menu.addSeparator()
-        _act(edit_menu, "&Find...", self._open_search, "Ctrl+F")
+        self._edit_menu = menu.addMenu("")
+        self._action_copy = _act(self._edit_menu, "", self._menu_copy, QKeySequence.StandardKey.Copy)
+        self._action_cut = _act(self._edit_menu, "", self._menu_cut, QKeySequence.StandardKey.Cut)
+        self._action_paste = _act(self._edit_menu, "", self._menu_paste, QKeySequence.StandardKey.Paste)
+        self._edit_menu.addSeparator()
+        self._action_find = _act(self._edit_menu, "", self._open_search, "Ctrl+F")
 
-        # ── View ──
-        view_menu = menu.addMenu("&View")
-        _act(view_menu, "Zoom &In", self._font_bigger, "Ctrl+=")
-        _act(view_menu, "Zoom &Out", self._font_smaller, "Ctrl+-")
-        _act(view_menu, "&Reset Zoom", self._font_reset, "Ctrl+0")
-        view_menu.addSeparator()
-        _act(view_menu, "Cycle &Theme", self._theme_cycle, "Ctrl+Shift+T")
-        _act(view_menu, "Toggle &Transparency", self._toggle_opacity, "Ctrl+Shift+O")
-        view_menu.addSeparator()
-        _act(view_menu, "Toggle Window &RTL", self._toggle_rtl_window)
+        self._view_menu = menu.addMenu("")
+        self._action_zoom_in = _act(self._view_menu, "", self._font_bigger, "Ctrl+=")
+        self._action_zoom_out = _act(self._view_menu, "", self._font_smaller, "Ctrl+-")
+        self._action_reset_zoom = _act(self._view_menu, "", self._font_reset, "Ctrl+0")
+        self._view_menu.addSeparator()
+        self._action_cycle_theme = _act(self._view_menu, "", self._theme_cycle, "Ctrl+Shift+T")
+        self._action_toggle_opacity = _act(self._view_menu, "", self._toggle_opacity, "Ctrl+Shift+O")
+        self._view_menu.addSeparator()
+        self._action_toggle_rtl = _act(self._view_menu, "", self._toggle_rtl_window)
 
-        # ── Text Direction ──
-        text_menu = menu.addMenu("Te&xt Direction")
-        _act(text_menu, "Toggle &Line RTL", self._toggle_rtl_line)
+        # ── Language Selection Submenu under View ──
+        self._lang_menu = self._view_menu.addMenu("")
+        self._action_lang_en = self._lang_menu.addAction("")
+        self._action_lang_en.triggered.connect(lambda: self._set_language("en"))
+        self._action_lang_ar = self._lang_menu.addAction("")
+        self._action_lang_ar.triggered.connect(lambda: self._set_language("ar"))
 
-        # ── Tools ──
-        tools_menu = menu.addMenu("&Tools")
-        _act(tools_menu, "&SSH Connect...", self._ssh_connect, "Ctrl+Shift+S")
-        _act(tools_menu, "&Serial Connect...", self._serial_connect, "Ctrl+Shift+R")
-        _act(tools_menu, "&WSL Connect...", self._wsl_connect, "Ctrl+Shift+U")
+        self._text_menu = menu.addMenu("")
+        self._action_toggle_line_rtl = _act(self._text_menu, "", self._toggle_rtl_line)
 
-        # ── Window ──
-        win_menu = menu.addMenu("&Window")
-        _act(win_menu, "N&ext Tab", self._next_tab, "Ctrl+Tab")
-        _act(win_menu, "&Previous Tab", self._prev_tab, "Ctrl+Shift+Tab")
+        self._tools_menu = menu.addMenu("")
+        self._action_ssh_connect = _act(self._tools_menu, "", self._ssh_connect, "Ctrl+Shift+S")
+        self._action_serial_connect = _act(self._tools_menu, "", self._serial_connect, "Ctrl+Shift+R")
+        self._action_wsl_connect = _act(self._tools_menu, "", self._wsl_connect, "Ctrl+Shift+U")
+
+        self._win_menu = menu.addMenu("")
+        self._action_next_tab = _act(self._win_menu, "", self._next_tab, "Ctrl+Tab")
+        self._action_prev_tab = _act(self._win_menu, "", self._prev_tab, "Ctrl+Shift+Tab")
+
+    def _set_language(self, lang_code: str):
+        """Set the active translation language and refresh the UI."""
+        if self._cfg:
+            self._cfg.ui.language = lang_code
+            self._cfg.save()
+        self._update_ui_language()
+
+    def _update_ui_language(self):
+        """Translate all UI texts dynamically and adjust layout direction based on current config."""
+        lang = self._cfg.ui.language if self._cfg else "en"
+
+        # Update menu titles
+        self._file_menu.setTitle(t("menu_file", lang))
+        self._action_new_tab.setText(t("menu_new_tab", lang))
+        self._action_close_tab.setText(t("menu_close_tab", lang))
+        self._action_profile_picker.setText(t("menu_profile_picker", lang))
+        self._action_manage_profiles.setText(t("menu_manage_profiles", lang))
+        self._action_exit.setText(t("menu_exit", lang))
+
+        self._edit_menu.setTitle(t("menu_edit", lang))
+        self._action_copy.setText(t("menu_copy", lang))
+        self._action_cut.setText(t("menu_cut", lang))
+        self._action_paste.setText(t("menu_paste", lang))
+        self._action_find.setText(t("menu_find", lang))
+
+        self._view_menu.setTitle(t("menu_view", lang))
+        self._action_zoom_in.setText(t("menu_zoom_in", lang))
+        self._action_zoom_out.setText(t("menu_zoom_out", lang))
+        self._action_reset_zoom.setText(t("menu_reset_zoom", lang))
+        self._action_cycle_theme.setText(t("menu_cycle_theme", lang))
+        self._action_toggle_opacity.setText(t("menu_toggle_transparency", lang))
+        self._action_toggle_rtl.setText(t("menu_toggle_window_rtl", lang))
+
+        self._lang_menu.setTitle(t("menu_language", lang))
+        self._action_lang_en.setText(t("menu_lang_en", lang))
+        self._action_lang_ar.setText(t("menu_lang_ar", lang))
+
+        self._text_menu.setTitle(t("menu_text_direction", lang))
+        self._action_toggle_line_rtl.setText(t("menu_toggle_line_rtl", lang))
+
+        self._tools_menu.setTitle(t("menu_tools", lang))
+        self._action_ssh_connect.setText(t("menu_ssh_connect", lang))
+        self._action_serial_connect.setText(t("menu_serial_connect", lang))
+        self._action_wsl_connect.setText(t("menu_wsl_connect", lang))
+
+        self._win_menu.setTitle(t("menu_window", lang))
+        self._action_next_tab.setText(t("menu_next_tab", lang))
+        self._action_prev_tab.setText(t("menu_prev_tab", lang))
+
+        # Dynamic layout direction
+        if lang == "ar":
+            self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+            for i in range(self._tabs.count()):
+                widget = self._tabs.widget(i)
+                if isinstance(widget, TerminalWidget):
+                    widget._output.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+                    widget._output.setAlignment(Qt.AlignmentFlag.AlignRight)
+                    widget._auto_arabic = True
+        else:
+            self.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+            for i in range(self._tabs.count()):
+                widget = self._tabs.widget(i)
+                if isinstance(widget, TerminalWidget):
+                    widget._output.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+                    widget._output.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
     def _menu_copy(self):
-        """Copy selected text from the current terminal's output or input."""
+        """Copy selected text from the current terminal's output."""
         widget = self._tabs.currentWidget()
         if isinstance(widget, TerminalWidget):
-            # Try output first
             cursor = widget._output.textCursor()
             if cursor.hasSelection():
                 QApplication.clipboard().setText(cursor.selectedText())
-            else:
-                # Try input
-                cursor = widget._input.textCursor()
-                if cursor.hasSelection():
-                    QApplication.clipboard().setText(cursor.selectedText())
 
     def _menu_cut(self):
-        """Cut selected text from the INPUT area only (output is read-only)."""
-        widget = self._tabs.currentWidget()
-        if isinstance(widget, TerminalWidget):
-            cursor = widget._input.textCursor()
-            if cursor.hasSelection():
-                QApplication.clipboard().setText(cursor.selectedText())
-                cursor.removeSelectedText()
+        """Cut is a no-op on a real terminal because terminal buffer is managed by the shell."""
+        pass
 
     def _menu_paste(self):
         widget = self._tabs.currentWidget()
@@ -825,27 +849,35 @@ class MainWindow(QMainWindow):
             widget._paste_clipboard()
 
     def _toggle_rtl_line(self):
+        """Manually toggle the current output line alignment (Right-to-Left / Left-to-Right)."""
         widget = self._tabs.currentWidget()
         if not isinstance(widget, TerminalWidget):
             return
-        cursor = widget.textCursor()
-        block = cursor.block()
-        fmt = block.charFormat()
-        if fmt.layoutDirection() == Qt.LayoutDirection.RightToLeft:
-            fmt.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+        cursor = widget._output.textCursor()
+        block_fmt = cursor.blockFormat()
+        if block_fmt.layoutDirection() == Qt.LayoutDirection.RightToLeft:
+            block_fmt.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
+            block_fmt.setAlignment(Qt.AlignmentFlag.AlignLeft)
         else:
-            fmt.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-        cursor.setBlockCharFormat(fmt)
+            block_fmt.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+            block_fmt.setAlignment(Qt.AlignmentFlag.AlignRight)
+        cursor.setBlockFormat(block_fmt)
 
     def _toggle_rtl_window(self):
+        """Manually toggle the entire OmniTerm layout direction and align text in the terminals."""
         if self.layoutDirection() == Qt.LayoutDirection.RightToLeft:
             new_dir = Qt.LayoutDirection.LeftToRight
+            new_align = Qt.AlignmentFlag.AlignLeft
         else:
             new_dir = Qt.LayoutDirection.RightToLeft
+            new_align = Qt.AlignmentFlag.AlignRight
+
         self.setLayoutDirection(new_dir)
-        # Propagate to output and input widgets
-        for w in (self._output, self._input):
-            w.setLayoutDirection(new_dir)
+        for i in range(self._tabs.count()):
+            widget = self._tabs.widget(i)
+            if isinstance(widget, TerminalWidget):
+                widget._output.setLayoutDirection(new_dir)
+                widget._output.setAlignment(new_align)
 
     # ── Tab management ─────────────────────────────────────────────────
 
@@ -959,6 +991,13 @@ class MainWindow(QMainWindow):
         if not success:
             terminal.append_shell_text("[SSH connection failed]\n")
 
+        # Set default alignments based on current config language
+        lang = self._cfg.ui.language if self._cfg else "en"
+        if lang == "ar":
+            terminal._output.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+            terminal._output.setAlignment(Qt.AlignmentFlag.AlignRight)
+            terminal._auto_arabic = True
+
         terminal.setFocus()
         return idx
 
@@ -997,6 +1036,13 @@ class MainWindow(QMainWindow):
         if not success:
             terminal.append_shell_text("[Serial connection failed]\n")
 
+        # Set default alignments based on current config language
+        lang = self._cfg.ui.language if self._cfg else "en"
+        if lang == "ar":
+            terminal._output.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+            terminal._output.setAlignment(Qt.AlignmentFlag.AlignRight)
+            terminal._auto_arabic = True
+
         terminal.setFocus()
         return idx
 
@@ -1023,7 +1069,8 @@ class MainWindow(QMainWindow):
             self.new_tab(wsl=True, distribution=name)
 
     def new_tab(self, shell: str = "cmd.exe", wsl: bool = False,
-                distribution: str | None = None, admin: bool = False) -> int:
+                distribution: str | None = None, admin: bool = False,
+                cwd: str | None = None) -> int:
         """Open a new tab running *shell* or WSL. Returns the tab index."""
         from terminal_core import TerminalEngine
 
@@ -1050,7 +1097,16 @@ class MainWindow(QMainWindow):
         self._tab_engines[idx] = engine
         self._tabs.setCurrentIndex(idx)
 
-        engine.start(cmd, admin=admin)
+        # Start the engine passing custom working directory (CWD)
+        engine.start(cmd, admin=admin, cwd=cwd)
+
+        # Set default alignments based on current config language
+        lang = self._cfg.ui.language if self._cfg else "en"
+        if lang == "ar":
+            terminal._output.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+            terminal._output.setAlignment(Qt.AlignmentFlag.AlignRight)
+            terminal._auto_arabic = True
+
         terminal.setFocus()
         return idx
 

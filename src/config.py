@@ -79,6 +79,7 @@ class UIConfig:
     theme: str = "campbell"
     cursor_style: str = "bar"
     cursor_blink: bool = True
+    language: str = "en"
 
 
 @dataclass
@@ -159,6 +160,7 @@ class Config:
         cfg.ui.theme = str(ui.get("theme", cfg.ui.theme))
         cfg.ui.cursor_style = str(ui.get("cursor_style", cfg.ui.cursor_style))
         cfg.ui.cursor_blink = bool(ui.get("cursor_blink", cfg.ui.cursor_blink))
+        cfg.ui.language = str(ui.get("language", cfg.ui.language))
 
         # Profiles
         raw_profiles = raw.get("profiles", {})
@@ -236,6 +238,7 @@ class Config:
             "theme": self.ui.theme,
             "cursor_style": self.ui.cursor_style,
             "cursor_blink": self.ui.cursor_blink,
+            "language": self.ui.language,
         }
 
         data["default_profile"] = self.default_profile

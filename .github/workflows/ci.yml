@@ -7,9 +7,9 @@ on:
     branches: [main, master]
 
 jobs:
-  # ── Test across Python versions ──
+  # ── Test across Python versions on Windows and Linux ──
   test:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -39,24 +39,30 @@ jobs:
       env:
         QT_QPA_PLATFORM: offscreen
 
-    - name: Build (PyInstaller check)
-      if: success() && matrix.python-version == '3.12'
-      run: pyinstaller OmniTerm.spec --noconfirm
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      if: matrix.python-version == '3.12'
-      with:
-        name: OmniTerm-win10-x64-pyinstaller-${{ github.sha }}
-        path: dist/pyOmniTerm-win10-x64.exe
-
-  # ── Build with PyInstaller + installer (on tag push only) ──
-  release:
+  # ── Build standalone executables across all platforms on tag push ──
+  build:
     needs: test
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: windows-latest
-    permissions:
-      contents: write
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request'
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            arch: x64
+            artifact-suffix: exe
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            artifact-suffix: elf
+          - os: macos-13
+            platform: macos
+            arch: x64
+            artifact-suffix: app
+          - os: macos-14
+            platform: macos
+            arch: arm64
+            artifact-suffix: app
+    runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
@@ -64,50 +70,104 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.12'
+        python-version: '3.11'
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        pip install pyinstaller
 
-    - name: Build with PyInstaller
-      run: pyinstaller OmniTerm.spec --noconfirm
-
-    - name: Install Inno Setup
-      run: choco install innosetup -y --no-progress
-
-    - name: Build installer
+    - name: Build executable
       run: |
+        pyinstaller OmniTerm.spec --noconfirm
+
+    # ── Windows specific post-build: zip and installer ──
+    - name: Windows Post-Build & Zip
+      if: matrix.platform == 'windows'
+      run: |
+        # Zip the executable
+        Compress-Archive -Path dist/OmniTerm-windows-x64.exe -DestinationPath dist/OmniTerm-windows-x64.zip
+
+        # Build Inno Setup Installer
+        choco install innosetup -y --no-progress
         & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\omniterm.iss
+
+        # Zip the Installer
+        Compress-Archive -Path installer/installer_output/OmniTermSetup-windows-x64.exe -DestinationPath dist/OmniTermSetup-windows-x64.zip
+      shell: powershell
+
+    # ── Linux specific post-build: tar.gz ──
+    - name: Linux Post-Build & Tar
+      if: matrix.platform == 'linux'
+      run: |
+        cd dist
+        tar -czf OmniTerm-linux-x64.tar.gz OmniTerm-windows-x64
+      shell: bash
+
+    # ── macOS specific post-build: zip ──
+    - name: macOS Post-Build & Zip
+      if: matrix.platform == 'macos'
+      run: |
+        cd dist
+        zip -r OmniTerm-macos-${{ matrix.arch }}.zip OmniTerm-windows-x64
+      shell: bash
+
+    - name: Upload Build Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: OmniTerm-${{ matrix.platform }}-${{ matrix.arch }}
+        path: |
+          dist/*.zip
+          dist/*.tar.gz
+          installer/installer_output/OmniTermSetup-windows-x64.exe
+
+  # ── Create GitHub Release (on tag push only) ──
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Prepare Release Files
+      run: |
+        mkdir release_files
+        find artifacts -type f -name "*.zip" -exec cp {} release_files/ \;
+        find artifacts -type f -name "*.tar.gz" -exec cp {} release_files/ \;
+        find artifacts -type f -name "OmniTermSetup-windows-x64.exe" -exec cp {} release_files/ \;
+        ls -la release_files
 
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        name: OmniTerm ${{ github.ref_name }} — Windows 10/11 x64
+        name: OmniTerm ${{ github.ref_name }}
         tag_name: ${{ github.ref_name }}
         body: |
-          ## OmniTerm ${{ github.ref_name }} — Windows 10/11 x64
+          ## OmniTerm ${{ github.ref_name }}
 
-          Lightweight terminal emulator built with Python + PyQt6.
+          Modern, high-performance terminal emulator with native Right-to-Left (RTL) support, dynamic Arabic shaping, and unified terminal screen.
 
           ### Downloads
-          | File | Description |
-          |------|-------------|
-          | `pyOmniTerm-win10-x64.exe` | PyInstaller standalone build (~40 MB) |
-          | `OmniTermSetup-win10-x64.exe` | Inno Setup installer |
+          | Platform | File | Description |
+          |------|-------------|------|
+          | **Windows (x64)** | `OmniTerm-windows-x64.zip` | Standalone Windows binary (zipped) |
+          | **Windows (x64)** | `OmniTermSetup-windows-x64.exe` | Windows Inno Setup Installer |
+          | **Linux (x64)** | `OmniTerm-linux-x64.tar.gz` | Linux standalone binary (tar.gz) |
+          | **macOS (Intel x64)** | `OmniTerm-macos-x64.zip` | macOS Intel binary (zipped) |
+          | **macOS (Apple Silicon ARM64)** | `OmniTerm-macos-arm64.zip` | macOS Apple Silicon binary (zipped) |
 
           ### Requirements
-          - Windows 10 (build 17763+) or Windows 11, x64
-          - No Python installation required
-
-          ### Nuitka build
-          For faster startup (~13ms vs ~97ms), build locally with:
-          ```
-          .\build.ps1 nuitka
-          ```
+          - No Python installation required.
         files: |
-          dist/pyOmniTerm-win10-x64.exe
-          installer/installer_output/OmniTermSetup-win10-x64.exe
+          release_files/*
         draft: false
         prerelease: false

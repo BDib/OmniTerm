@@ -3,6 +3,8 @@ PyQt6>=6.7
 toml>=0.10
 paramiko>=3.0
 pyserial>=3.5
+arabic-reshaper>=3.0.1
+python-bidi>=0.6.11
 
 # Dev / build dependencies
 pytest>=7.0

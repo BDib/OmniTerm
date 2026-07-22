@@ -88,9 +88,9 @@ class ConPTYEngine(QObject):
     def alive(self) -> bool:
         return self._alive
 
-    def start(self, cmd: str = "cmd.exe", width: int = 120, height: int = 40) -> bool:
+    def start(self, cmd: str = "cmd.exe", width: int = 120, height: int = 40, cwd: str | None = None) -> bool:
         try:
-            self._session = self._create_console(cmd, width, height)
+            self._session = self._create_console(cmd, width, height, cwd)
             self._alive = True
             self._reader = threading.Thread(target=self._read_loop, daemon=True, name="conpty-reader")
             self._reader.start()
@@ -119,7 +119,7 @@ class ConPTYEngine(QObject):
                     k32.CloseHandle(h)
             self._session = None
 
-    def _create_console(self, cmd: str, w: int, h: int) -> ConPTYSession:
+    def _create_console(self, cmd: str, w: int, h: int, cwd: str | None = None) -> ConPTYSession:
         s = ConPTYSession()
 
         # ── Pipe 1: host → shell (input) ──────────────────────────
@@ -174,10 +174,11 @@ class ConPTYEngine(QObject):
 
         pi = PROCESS_INFORMATION()
         cmd_buf = ctypes.create_unicode_buffer(cmd)
+        cwd_buf = ctypes.create_unicode_buffer(cwd) if cwd else None
         if not k32.CreateProcessW(
             None, cmd_buf, None, None, False,
             EXTENDED_STARTUPINFO_PRESENT_FLAG,
-            None, None, ctypes.byref(si), ctypes.byref(pi)):
+            None, cwd_buf, ctypes.byref(si), ctypes.byref(pi)):
             err = ctypes.GetLastError()
             k32.DeleteProcThreadAttributeList(attr_ptr)
             raise OSError(f"CreateProcessW failed: error={err}")

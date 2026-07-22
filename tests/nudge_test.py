@@ -10,8 +10,9 @@ def test_line_endings():
     if os.path.exists(log_file):
         os.remove(log_file)
 
+    shell = "cmd.exe" if os.name == "nt" else "/bin/sh"
     proc = subprocess.Popen(
-        ["cmd.exe"],
+        [shell],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -20,7 +21,8 @@ def test_line_endings():
 
     try:
         time.sleep(0.5)
-        proc.stdin.write(f"echo worked > {log_file}\r\n")
+        cmd_str = f"echo worked > {log_file}\r\n" if os.name == "nt" else f"echo worked > {log_file}\n"
+        proc.stdin.write(cmd_str)
         proc.stdin.flush()
         time.sleep(2)
 

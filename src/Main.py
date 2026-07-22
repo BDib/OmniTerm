@@ -62,6 +62,8 @@ def parse_args():
                         help="Log startup details to errors.txt")
     parser.add_argument("--version", "-V", action="version",
                         version=f"OmniTerm v{VERSION}")
+    parser.add_argument("path", nargs="?", default=None,
+                        help="Optional initial working directory path to start OmniTerm in")
     return parser.parse_args()
 
 
@@ -100,10 +102,32 @@ def run():
             if args.verbose:
                 _write_log(f"Shell: {shell_cmd}")
 
-        if args.verbose:
-            _write_log("Creating MainWindow...")
+        # Resolve initial working directory (CWD)
+        target_dir = None
+        if args.path:
+            resolved = os.path.abspath(args.path)
+            if os.path.isdir(resolved):
+                target_dir = resolved
+        else:
+            if getattr(sys, "frozen", False):
+                install_dir = os.path.dirname(sys.executable)
+            else:
+                # development: project root contains src/
+                install_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-        window = MainWindow(cfg, plain_mode=args.plain, shell=shell_cmd)
+            cwd = os.path.abspath(os.getcwd())
+            inst = os.path.abspath(install_dir)
+            if cwd == inst:
+                # Started from install dir -> default to home folder
+                target_dir = os.path.expanduser("~")
+            else:
+                # Started from elsewhere (like CLI command) -> keep current working directory
+                target_dir = cwd
+
+        if args.verbose:
+            _write_log(f"Creating MainWindow with CWD: {target_dir} ...")
+
+        window = MainWindow(cfg, plain_mode=args.plain, shell=shell_cmd, cwd=target_dir)
 
         if args.verbose:
             _write_log("MainWindow created, showing...")

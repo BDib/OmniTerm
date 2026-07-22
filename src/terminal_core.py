@@ -47,22 +47,25 @@ class TerminalEngine:
         self._reader_thread: threading.Thread | None = None
         self._writer_thread: threading.Thread | None = None
         self._conpty = None
+        self._unix_pty = None
 
-    def start(self, cmd: str = "cmd.exe", admin: bool = False) -> bool:
+    def start(self, cmd: str = "cmd.exe", admin: bool = False, cwd: str | None = None) -> bool:
         self._cmd = cmd
         self.ssh = None
         self.serial = None
-        _elog(f"Starting: cmd={cmd!r}, admin={admin}")
+        _elog(f"Starting: cmd={cmd!r}, admin={admin}, cwd={cwd!r}")
+        if os.name != "nt":
+            return self._start_unix_pty(cmd, cwd)
         if admin:
             return self._start_elevated(cmd)
-        return self._start_conpty(cmd)
+        return self._start_conpty(cmd, cwd)
 
-    def _start_conpty(self, cmd: str) -> bool:
+    def _start_conpty(self, cmd: str, cwd: str | None = None) -> bool:
         """Start a ConPTY session."""
         try:
             from conpty import ConPTYEngine
             self._conpty = ConPTYEngine()
-            if not self._conpty.start(cmd):
+            if not self._conpty.start(cmd, cwd=cwd):
                 _elog("ConPTYEngine.start() returned False")
                 return False
             self.alive = True
@@ -73,6 +76,22 @@ class TerminalEngine:
             return True
         except Exception as exc:
             _elog_exc("ConPTY failed", exc)
+            return False
+
+    def _start_unix_pty(self, cmd: str, cwd: str | None = None) -> bool:
+        """Start a Unix PTY session."""
+        try:
+            from unix_pty import UnixPTYEngine
+            self._unix_pty = UnixPTYEngine(self.signals)
+            if not self._unix_pty.start(cmd, cwd=cwd):
+                _elog("UnixPTYEngine.start() returned False")
+                return False
+            self.alive = True
+            self.is_ready = True
+            _elog("Unix PTY started OK")
+            return True
+        except Exception as exc:
+            _elog_exc("Unix PTY failed", exc)
             return False
 
     def _on_conpty_exit(self, msg: str):
@@ -208,6 +227,9 @@ class TerminalEngine:
         if self._conpty:
             self._conpty.kill()
             self._conpty = None
+        if self._unix_pty:
+            self._unix_pty.kill()
+            self._unix_pty = None
         if self.ssh:
             try:
                 self.ssh.close()
@@ -225,6 +247,8 @@ class TerminalEngine:
     def is_alive(self) -> bool:
         if self._conpty:
             return self._conpty.alive
+        if self._unix_pty:
+            return self._unix_pty.alive
         if self.ssh:
             return self.alive and self.ssh.is_connected
         if self.serial:
@@ -243,6 +267,8 @@ class TerminalEngine:
         if self.alive:
             if self._conpty:
                 self._conpty.write(data)
+            elif self._unix_pty:
+                self._unix_pty.write(data)
             else:
                 self.input_queue.put(data)
 
