@@ -39,29 +39,23 @@ jobs:
       env:
         QT_QPA_PLATFORM: offscreen
 
-  # ── Build standalone executables across all platforms on tag push ──
+  # ── Build standalone executables on tag push ──
   build:
     needs: test
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'pull_request'
+    if: startsWith(github.ref, 'refs/tags/v')
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
             platform: windows
             arch: x64
-            artifact-suffix: exe
           - os: ubuntu-latest
             platform: linux
             arch: x64
-            artifact-suffix: elf
-          - os: macos-13
-            platform: macos
-            arch: x64
-            artifact-suffix: app
           - os: macos-14
             platform: macos
             arch: arm64
-            artifact-suffix: app
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -70,7 +64,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.12'
 
     - name: Install dependencies
       run: |
@@ -79,38 +73,32 @@ jobs:
         pip install pyinstaller
 
     - name: Build executable
-      run: |
-        pyinstaller OmniTerm.spec --noconfirm
+      run: pyinstaller OmniTerm.spec --noconfirm
 
-    # ── Windows specific post-build: zip and installer ──
-    - name: Windows Post-Build & Zip
+    # ── Windows: zip + installer ──
+    - name: Windows Post-Build
       if: matrix.platform == 'windows'
       run: |
-        # Zip the executable
-        Compress-Archive -Path dist/OmniTerm-windows-x64.exe -DestinationPath dist/OmniTerm-windows-x64.zip
-
-        # Build Inno Setup Installer
+        Compress-Archive -Path dist/pyOmniTerm-win10-x64.exe -DestinationPath dist/OmniTerm-windows-x64.zip
         choco install innosetup -y --no-progress
         & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\omniterm.iss
-
-        # Zip the Installer
-        Compress-Archive -Path installer/installer_output/OmniTermSetup-windows-x64.exe -DestinationPath dist/OmniTermSetup-windows-x64.zip
+        Compress-Archive -Path installer/installer_output/OmniTermSetup-win10-x64.exe -DestinationPath dist/OmniTermSetup-windows-x64.zip
       shell: powershell
 
-    # ── Linux specific post-build: tar.gz ──
-    - name: Linux Post-Build & Tar
+    # ── Linux: tar.gz ──
+    - name: Linux Post-Build
       if: matrix.platform == 'linux'
       run: |
         cd dist
-        tar -czf OmniTerm-linux-x64.tar.gz OmniTerm-windows-x64
+        tar -czf OmniTerm-linux-x64.tar.gz pyOmniTerm*
       shell: bash
 
-    # ── macOS specific post-build: zip ──
-    - name: macOS Post-Build & Zip
+    # ── macOS: zip ──
+    - name: macOS Post-Build
       if: matrix.platform == 'macos'
       run: |
         cd dist
-        zip -r OmniTerm-macos-${{ matrix.arch }}.zip OmniTerm-windows-x64
+        zip -r OmniTerm-macos-arm64.zip pyOmniTerm*
       shell: bash
 
     - name: Upload Build Artifacts
@@ -120,7 +108,6 @@ jobs:
         path: |
           dist/*.zip
           dist/*.tar.gz
-          installer/installer_output/OmniTermSetup-windows-x64.exe
 
   # ── Create GitHub Release (on tag push only) ──
   release:
@@ -141,9 +128,7 @@ jobs:
     - name: Prepare Release Files
       run: |
         mkdir release_files
-        find artifacts -type f -name "*.zip" -exec cp {} release_files/ \;
-        find artifacts -type f -name "*.tar.gz" -exec cp {} release_files/ \;
-        find artifacts -type f -name "OmniTermSetup-windows-x64.exe" -exec cp {} release_files/ \;
+        find artifacts -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} release_files/ \;
         ls -la release_files
 
     - name: Create Release
@@ -154,19 +139,19 @@ jobs:
         body: |
           ## OmniTerm ${{ github.ref_name }}
 
-          Modern, high-performance terminal emulator with native Right-to-Left (RTL) support, dynamic Arabic shaping, and unified terminal screen.
+          Modern terminal emulator with native RTL support, Arabic shaping, and unified terminal screen.
 
           ### Downloads
           | Platform | File | Description |
-          |------|-------------|------|
-          | **Windows (x64)** | `OmniTerm-windows-x64.zip` | Standalone Windows binary (zipped) |
-          | **Windows (x64)** | `OmniTermSetup-windows-x64.exe` | Windows Inno Setup Installer |
-          | **Linux (x64)** | `OmniTerm-linux-x64.tar.gz` | Linux standalone binary (tar.gz) |
-          | **macOS (Intel x64)** | `OmniTerm-macos-x64.zip` | macOS Intel binary (zipped) |
-          | **macOS (Apple Silicon ARM64)** | `OmniTerm-macos-arm64.zip` | macOS Apple Silicon binary (zipped) |
+          |----------|------|-------------|
+          | **Windows (x64)** | `OmniTerm-windows-x64.zip` | Standalone binary |
+          | **Windows (x64)** | `OmniTermSetup-windows-x64.zip` | Inno Setup Installer |
+          | **Linux (x64)** | `OmniTerm-linux-x64.tar.gz` | Standalone binary |
+          | **macOS (ARM64)** | `OmniTerm-macos-arm64.zip` | Apple Silicon binary |
 
           ### Requirements
           - No Python installation required.
+          - Windows 10+ (x64), Linux (x64), macOS 11+ (ARM64)
         files: |
           release_files/*
         draft: false
