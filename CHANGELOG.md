@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.2.0 — Session 9 (2026-07-22)
+
+### Unified Terminal Widget (major)
+- **Single TerminalScreen widget** replaces dual-pane layout — behaves like a real terminal
+- **Arabic shaping + bidi** — Dynamic Arabic character reshaping and bidirectional text
+- **Cross-platform PTY** — Windows (ConPTY), Linux/macOS (pty module)
+- **Dynamic i18n** — English/Arabic language switching
+- **CWD path resolution** — Smart working directory detection via `--path` argument
+- **BACKSPACE fix** — `deleteChar()` → `deletePreviousChar()` (correct backward delete)
+
+### CI/CD
+- Multi-platform builds: Windows x64, Linux x64, macOS x64, macOS ARM64
+- Removed deprecated `macos-13` runner, using `macos-15-intel` for Intel builds
+
+---
+
 ## v2.1.6 — Session 9 (2026-07-22)
 
 ### Fix: Arrow keys echoing VT sequences, Tab focus jump

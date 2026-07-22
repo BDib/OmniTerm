@@ -8,13 +8,14 @@ OmniTerm provides a clean, modern GUI wrapper around the Windows Pseudo Console 
 
 ## Features
 
+- **Unified Terminal Screen** — Single-widget terminal with native cursor and editing
 - **ConPTY Backend** — Native Windows Pseudo Console API (no third-party PTY dependencies)
-- **Dual-Pane Terminal** — Separate output display (QTextEdit) and input editor (QTextEdit) with native cursor and editing
+- **Cross-Platform PTY** — Windows (ConPTY), Linux/macOS (pty module)
+- **Arabic Shaping + RTL** — Dynamic Arabic character reshaping and bidirectional text support
 - **Full ANSI Color Rendering** — Complete SGR parser with 256-color and true-color (RGB) support, bold, italic, underline, inverse, strikethrough
 - **13 Built-in Themes** — Campbell, Solarized Dark, One Half Dark, Monokai, Dracula, Nord, GitHub Dark, Catppuccin Mocha, Tomorrow Night, Gruvbox Dark, Tokyo Night, Rosé Pine, Zenburn
 - **Profile Management** — Add, edit, duplicate, delete shell profiles with a table-based UI (File > Manage Profiles)
 - **Run As Admin** — Each profile supports admin mode; triggers UAC and relaunches OmniTerm elevated
-- **"+" Tab Button** — Corner widget with dropdown listing all profiles for quick tab creation
 - **Multi-Tab Interface** — `Ctrl+T` new tab, `Ctrl+W` close tab, `Ctrl+Tab` cycle tabs
 - **SSH Sessions** — `Ctrl+Shift+S` for remote hosts with password or key-based auth
 - **Serial Console** — `Ctrl+Shift+R` for COM port connections
@@ -26,7 +27,8 @@ OmniTerm provides a clean, modern GUI wrapper around the Windows Pseudo Console 
 - **Window Persistence** — Remembers position and size across launches
 - **Cursor Styles** — Configurable bar, block, or underline cursor
 - **Transparency Toggle** — `Ctrl+Shift+O` toggles opacity
-- **CLI Arguments** — `--shell`, `--profile`, `--plain`, `--config`, `--version`
+- **i18n** — English/Arabic language switching
+- **CLI Arguments** — `--shell`, `--profile`, `--plain`, `--config`, `--version`, `--path`
 
 ---
 
@@ -40,7 +42,9 @@ OmniTerm/
 │   ├── themes.py            # 13 built-in themes
 │   ├── ansi_parser.py       # ANSI escape sequence parser
 │   ├── ansi_renderer.py     # Maps parsed spans → QTextCharFormat
-│   ├── conpty.py            # ConPTY backend via ctypes
+│   ├── conpty.py            # ConPTY backend via ctypes (Windows)
+│   ├── unix_pty.py          # Unix PTY backend via pty module (Linux/macOS)
+│   ├── i18n.py              # Internationalization (English/Arabic)
 │   ├── mouse_handler.py     # xterm mouse protocol encoder
 │   ├── scroll_buffer.py     # Ring-buffer of styled lines
 │   ├── search_bar.py        # Ctrl+F search dialog
@@ -52,9 +56,9 @@ OmniTerm/
 │   ├── profile_picker.py    # Shell profile picker dialog
 │   ├── profile_manager.py   # Profile management UI (add/edit/delete)
 │   ├── terminal_core.py     # TerminalEngine — PTY + SSH + serial sessions
-│   ├── terminal_ui.py       # PyQt6 UI — TerminalWidget, tabs, menus
+│   ├── terminal_ui.py       # PyQt6 UI — TerminalScreen, tabs, menus
 │   └── __init__.py
-├── tests/                   # 12 test suites, 141 tests
+├── tests/                   # 12 test suites, 139 tests
 ├── installer/               # Inno Setup installer script
 │   └── omniterm.iss
 ├── settings.toml            # User configuration
