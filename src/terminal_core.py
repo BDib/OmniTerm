@@ -221,6 +221,8 @@ class TerminalEngine:
                 break
 
     def kill(self) -> None:
+        if not self.alive and not self._conpty and not self._unix_pty:
+            return
         self.alive = False
         self.is_ready = False
         self.input_queue.put(None)

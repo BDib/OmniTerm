@@ -555,6 +555,7 @@ class MainWindow(QMainWindow):
         self._plain_mode = plain_mode
         self._settings = QSettings("OmniTerm", "OmniTerm")
         self._tab_engines: dict[int, "TerminalEngine"] = {}  # noqa: F821
+        self._closing = False
 
         # Detect if running as admin
         self._is_admin = self._check_admin()
@@ -883,7 +884,10 @@ class MainWindow(QMainWindow):
 
     def _close_tab(self, index: int) -> None:
         """Close the tab at *index*."""
+        if self._closing:
+            return
         if self._tabs.count() <= 1:
+            self._closing = True
             self.close()
             return
 
@@ -891,7 +895,6 @@ class MainWindow(QMainWindow):
         widget = self._tabs.widget(index)
 
         if engine:
-            # Disconnect signals before killing to avoid referencing deleted widget
             try:
                 engine.signals.exited.disconnect()
                 engine.signals.text_ready.disconnect()
@@ -926,6 +929,8 @@ class MainWindow(QMainWindow):
 
     def _on_tab_process_exited(self, terminal: TerminalWidget) -> None:
         """Close the tab when the shell process exits."""
+        if self._closing:
+            return
         idx = self._tabs.indexOf(terminal)
         if idx >= 0:
             self._close_tab(idx)
@@ -1172,6 +1177,7 @@ class MainWindow(QMainWindow):
             self.restoreState(state)
 
     def closeEvent(self, event):
+        self._closing = True
         self.kill_all_engines()
         self._settings.setValue("window/geometry", self.saveGeometry())
         self._settings.setValue("window/state", self.saveState())
@@ -1185,6 +1191,9 @@ class MainWindow(QMainWindow):
 
     def kill_all_engines(self) -> None:
         """Kill all tab engines. Called on window close."""
-        for engine in self._tab_engines.values():
-            engine.kill()
+        for engine in list(self._tab_engines.values()):
+            try:
+                engine.kill()
+            except Exception:
+                pass
         self._tab_engines.clear()
