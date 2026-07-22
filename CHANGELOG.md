@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.1.2 — Session 9 (2026-07-22)
+
+### Fix: CreatePseudoConsole E_INVALIDARG
+- **Root cause** — `CreatePseudoConsole` was called with `COORD(0, 0)` as the console size. A zero-size console is invalid and returns `E_INVALIDARG` (0x80070057).
+- **Fix** — Pass the actual requested dimensions `(w, h)` to `CreatePseudoConsole` instead of `(0, 0)`. Removed redundant `ResizePseudoConsole` call.
+- This fix applies to all run modes: Python interpreter, PyInstaller, and Nuitka.
+
+---
+
 ## v2.1.1 — Session 9 (2026-07-22)
 
 ### Fix: ConPTY shell not launching

@@ -145,18 +145,15 @@ class ConPTYEngine(QObject):
             raise OSError(f"CreatePipe failed: {ctypes.GetLastError()}")
         _elog(f"CreatePipe OK: in={h_con_in.value}, out={h_con_out.value}")
 
-        # Create pseudo console
+        # Create pseudo console — must have non-zero size
         h_pc = wt.HANDLE()
         hr = k32.CreatePseudoConsole(
-            wt._COORD(0, 0), h_con_in, h_con_out, 0, ctypes.byref(h_pc))
+            wt._COORD(w, h), h_con_in, h_con_out, 0, ctypes.byref(h_pc))
         if hr != 0:
             k32.CloseHandle(h_con_in)
             k32.CloseHandle(h_con_out)
-            raise OSError(f"CreatePseudoConsole failed: 0x{hr:08x}")
+            raise OSError(f"CreatePseudoConsole failed: 0x{hr & 0xFFFFFFFF:08x}")
         _elog(f"CreatePseudoConsole OK: h_pc={h_pc.value}")
-
-        # Resize to requested dimensions
-        k32.ResizePseudoConsole(h_pc, wt._COORD(w, h))
         s.h_console = h_pc
 
         # Build attribute list
