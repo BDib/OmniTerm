@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.1.1 — Session 9 (2026-07-22)
+
+### Fix: ConPTY shell not launching
+- **Root cause** — `CreateProcessW` requires a writable buffer for `lpCommandLine`, but a Python string was being passed directly. ctypes conversion was insufficient on Nuitka onefile builds.
+- **Fix** — Use `ctypes.create_unicode_buffer(cmd)` to create a proper writable buffer.
+- **Added error logging** — ConPTY now logs each API call result to errors.txt for debugging.
+- **CI fixes** — Drop Python 3.10, set fail-fast:false, add conftest.py for Qt cleanup, tag-only triggers.
+
+---
+
 ## v2.1.0 — Session 8 (2026-07-22)
 
 ### Critical Fix: Nuitka 5-second crash

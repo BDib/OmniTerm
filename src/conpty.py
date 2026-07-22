@@ -8,7 +8,7 @@ pipe I/O.
 from __future__ import annotations
 import ctypes
 import ctypes.wintypes as wt
-import os, sys, threading, time, queue
+import os, sys, threading, time, queue, traceback
 from dataclasses import dataclass, field
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -19,6 +19,16 @@ STARTF_USESTDHANDLES = 0x00000100
 INVALID_HANDLE_VALUE = wt.HANDLE(-1).value
 
 k32 = ctypes.windll.kernel32
+
+
+def _elog(msg: str):
+    """Write to errors.txt for debugging."""
+    try:
+        d = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
+        with open(os.path.join(d, "errors.txt"), "a", encoding="utf-8") as f:
+            f.write(f"[{time.strftime('%H:%M:%S')}] {msg}\n")
+    except Exception:
+        pass
 
 
 # ── STARTUPINFOEXW — extended startup info with attribute list ─────
@@ -85,12 +95,16 @@ class ConPTYEngine(QObject):
     def start(self, cmd: str = "cmd.exe", width: int = 120, height: int = 40) -> bool:
         """Spawn *cmd* inside a ConPTY.  Returns True on success."""
         try:
+            _elog(f"ConPTY start: cmd={cmd!r}, sizeof(STARTUPINFOEXW)={ctypes.sizeof(STARTUPINFOEXW)}")
             self._session = self._create_console(cmd, width, height)
             self._alive = True
             self._reader = threading.Thread(target=self._read_loop, daemon=True, name="conpty-reader")
             self._reader.start()
+            _elog("ConPTY start: success")
             return True
-        except Exception:
+        except Exception as exc:
+            _elog(f"ConPTY start FAILED: {exc}")
+            _elog(traceback.format_exc())
             self._alive = False
             return False
 
@@ -125,12 +139,11 @@ class ConPTYEngine(QObject):
         s = ConPTYSession()
 
         # Create pipes for the pseudo console.
-        # h_con_in  = read end  (we read console output from this)
-        # h_con_out = write end (we write user input to this)
         h_con_in = wt.HANDLE()
         h_con_out = wt.HANDLE()
         if not k32.CreatePipe(ctypes.byref(h_con_in), ctypes.byref(h_con_out), None, 0):
             raise OSError(f"CreatePipe failed: {ctypes.GetLastError()}")
+        _elog(f"CreatePipe OK: in={h_con_in.value}, out={h_con_out.value}")
 
         # Create pseudo console
         h_pc = wt.HANDLE()
@@ -140,16 +153,16 @@ class ConPTYEngine(QObject):
             k32.CloseHandle(h_con_in)
             k32.CloseHandle(h_con_out)
             raise OSError(f"CreatePseudoConsole failed: 0x{hr:08x}")
+        _elog(f"CreatePseudoConsole OK: h_pc={h_pc.value}")
 
         # Resize to requested dimensions
         k32.ResizePseudoConsole(h_pc, wt._COORD(w, h))
         s.h_console = h_pc
 
-        # Build attribute list with the pseudo console handle.
-        # This MUST use STARTUPINFOEXW (not STARTUPINFOW) so that
-        # CreateProcessW actually reads lpAttributeList from memory.
+        # Build attribute list
         attr_size = wt.DWORD(0)
         k32.InitializeProcThreadAttributeList(None, 1, 0, ctypes.byref(attr_size))
+        _elog(f"Attr list size: {attr_size.value}")
         attr_buf = (ctypes.c_byte * attr_size.value)()
         attr_ptr = ctypes.cast(attr_buf, ctypes.c_void_p)
         if not k32.InitializeProcThreadAttributeList(attr_ptr, 1, 0, ctypes.byref(attr_size)):
@@ -159,28 +172,29 @@ class ConPTYEngine(QObject):
             PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
             h_pc, ctypes.sizeof(h_pc), None, None):
             raise OSError(f"UpdateProcThreadAttribute failed: {ctypes.GetLastError()}")
+        _elog("Attribute list OK")
 
         # Use STARTUPINFOEXW so cb and lpAttributeList are both correct
         si = STARTUPINFOEXW()
         si.cb = ctypes.sizeof(si)
         si.dwFlags = STARTF_USESTDHANDLES
         si.lpAttributeList = attr_ptr
+        _elog(f"STARTUPINFOEXW: cb={si.cb}, dwFlags=0x{si.dwFlags:x}")
 
-        # Create process — no CREATE_NO_WINDOW; ConPTY owns the console
+        # Create process
         pi = wt.PROCESS_INFORMATION()
+        cmd_buf = ctypes.create_unicode_buffer(cmd)
         if not k32.CreateProcessW(
-            None, cmd, None, None, False,
+            None, cmd_buf, None, None, False,
             EXTENDED_STARTUPINFO_PRESENT_FLAG,
             None, None, ctypes.byref(si), ctypes.byref(pi)):
             err = ctypes.GetLastError()
             k32.DeleteProcThreadAttributeList(attr_ptr)
-            raise OSError(f"CreateProcessW failed: {err}")
+            raise OSError(f"CreateProcessW failed: error={err}")
+        _elog(f"CreateProcessW OK: pid={pi.dwProcessId}")
 
         s.h_process = pi.hProcess
         s.h_thread = pi.hThread
-        # Pipe mapping:
-        #   Console reads from h_con_in  → we write to h_con_out to send input
-        #   Console writes to h_con_out  → we read from h_con_in to get output
         s.h_read = h_con_in
         s.h_write = h_con_out
         return s
