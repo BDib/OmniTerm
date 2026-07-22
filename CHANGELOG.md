@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.1.3 — Session 9 (2026-07-22)
+
+### Fix: Missing PROCESS_INFORMATION struct
+- **Root cause** — `ctypes.wintypes` does not have `PROCESS_INFORMATION`. The ConPTY engine used `wt.PROCESS_INFORMATION()` which threw `AttributeError`.
+- **Fix** — Defined `PROCESS_INFORMATION` as a ctypes Structure with `hProcess`, `hThread`, `dwProcessId`, `dwThreadId` fields.
+- Verified working in Python interpreter, Nuitka, and PyInstaller builds.
+
+---
+
 ## v2.1.2 — Session 9 (2026-07-22)
 
 ### Fix: CreatePseudoConsole E_INVALIDARG

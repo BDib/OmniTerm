@@ -65,6 +65,15 @@ class STARTUPINFOEXW(_STARTUPINFOW):
     ]
 
 
+class PROCESS_INFORMATION(ctypes.Structure):
+    _fields_ = [
+        ("hProcess", wt.HANDLE),
+        ("hThread", wt.HANDLE),
+        ("dwProcessId", wt.DWORD),
+        ("dwThreadId", wt.DWORD),
+    ]
+
+
 @dataclass
 class ConPTYSession:
     """Holds handles for a single ConPTY session."""
@@ -179,7 +188,7 @@ class ConPTYEngine(QObject):
         _elog(f"STARTUPINFOEXW: cb={si.cb}, dwFlags=0x{si.dwFlags:x}")
 
         # Create process
-        pi = wt.PROCESS_INFORMATION()
+        pi = PROCESS_INFORMATION()
         cmd_buf = ctypes.create_unicode_buffer(cmd)
         if not k32.CreateProcessW(
             None, cmd_buf, None, None, False,
