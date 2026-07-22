@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.4.4 — Session 9 (2026-07-22)
+
+### Fix: Exit command not closing tab
+- **Root cause**: `ReadFile` returns `True` with `read.value == 0` (EOF) when pipe closes, not `False`. Old code only broke on `not ok`, causing infinite retry loop.
+- **Fix**: Break on any non-positive read (both `not ok` and `read.value == 0`)
+
+---
+
 ## v2.4.3 — Session 9 (2026-07-22)
 
 ### Fix: Exit not closing tab + close crash

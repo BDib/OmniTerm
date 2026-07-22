@@ -191,21 +191,15 @@ class ConPTYEngine(QObject):
         time.sleep(0.3)
         while self._alive:
             try:
-                # Check if process is still alive before reading
-                if s.h_process:
-                    exit_code = wt.DWORD(0)
-                    if k32.GetExitCodeProcess(s.h_process, ctypes.byref(exit_code)):
-                        if exit_code.value != 259:  # STILL_ACTIVE
-                            break
                 ok = k32.ReadFile(s.h_read, buf, len(buf), ctypes.byref(read), None)
                 if ok and read.value > 0:
                     chunk = buf[:read.value].decode("utf-8", errors="replace")
                     self.text_ready.emit(chunk)
-                elif not ok:
-                    break
                 else:
-                    time.sleep(0.01)
+                    # Either ReadFile failed (pipe closed) or returned 0 bytes (EOF)
+                    break
             except Exception:
                 break
+            time.sleep(0.01)
         self._alive = False
         self.exited.emit("[Process exited]")
