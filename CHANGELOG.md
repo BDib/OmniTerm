@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.4.3 — Session 9 (2026-07-22)
+
+### Fix: Exit not closing tab + close crash
+- Removed pipe handle closing from `kill()` — closing while `ReadFile` blocks causes C-level crash
+- Added `GetExitCodeProcess` check in `_read_loop` to detect when shell exits
+- Read loop now breaks when process exit code is no longer STILL_ACTIVE
+
+---
+
 ## v2.4.2 — Session 9 (2026-07-22)
 
 ### Fix: RTL toggle crash
