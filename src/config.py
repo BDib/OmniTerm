@@ -13,7 +13,7 @@ from typing import Any
 
 import toml
 
-VERSION = "2.1.6"
+VERSION = "2.3.0"
 
 
 def _appdata_dir() -> Path:

@@ -1,8 +1,8 @@
 # OmniTerm
 
-A lightweight, extensible Windows terminal emulator built with Python, PyQt6, and Windows ConPTY.
+A modern, cross-platform terminal emulator built with Python and PyQt6.
 
-OmniTerm provides a clean, modern GUI wrapper around the Windows Pseudo Console (ConPTY), giving you a fast terminal experience with full ANSI color rendering, dark themes, multi-tab support, SSH/Serial/WSL integration, and a thread-safe architecture.
+OmniTerm provides a fast, lightweight terminal experience with native ConPTY integration on Windows, pty support on Linux/macOS, full ANSI color rendering, Arabic/bidirectional text support, dark themes, multi-tab interface, SSH/Serial/WSL integration, and a thread-safe architecture. Written in Python for rapid development and easy customization.
 
 ---
 

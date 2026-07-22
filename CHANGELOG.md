@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.3.0 — Session 9 (2026-07-22)
+
+### CI/CD: Full cross-platform builds
+- **Windows ARM64** — Added `windows-11-arm` runner for ARM64 builds
+- **Linux ARM64** — Added `ubuntu-24.04-arm` runner for ARM64 builds
+- **macOS Intel x64** — Using `macos-15-intel` runner (replaces deprecated `macos-13`)
+- **macOS ARM64** — `macos-14` runner (unchanged)
+- Total: 6 platform builds (Windows x64/ARM64, Linux x64/ARM64, macOS x64/ARM64)
+
+### README
+- Updated description to reflect cross-platform nature and unified terminal architecture
+
+---
+
 ## v2.2.0 — Session 9 (2026-07-22)
 
 ### Unified Terminal Widget (major)

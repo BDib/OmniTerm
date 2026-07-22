@@ -50,9 +50,15 @@ jobs:
           - os: windows-latest
             platform: windows
             arch: x64
+          - os: windows-11-arm
+            platform: windows
+            arch: arm64
           - os: ubuntu-latest
             platform: linux
             arch: x64
+          - os: ubuntu-24.04-arm
+            platform: linux
+            arch: arm64
           - os: macos-14
             platform: macos
             arch: arm64
@@ -82,7 +88,7 @@ jobs:
     - name: Windows Post-Build
       if: matrix.platform == 'windows'
       run: |
-        Compress-Archive -Path dist/OmniTerm-windows-x64.exe -DestinationPath dist/OmniTerm-windows-x64.zip
+        Compress-Archive -Path dist/OmniTerm-windows-x64.exe -DestinationPath dist/OmniTerm-windows-${{ matrix.arch }}.zip
       shell: powershell
 
     # ── Linux: tar.gz ──
@@ -90,7 +96,7 @@ jobs:
       if: matrix.platform == 'linux'
       run: |
         cd dist
-        tar -czf OmniTerm-linux-x64.tar.gz OmniTerm-windows-x64
+        tar -czf OmniTerm-linux-${{ matrix.arch }}.tar.gz OmniTerm-windows-x64
       shell: bash
 
     # ── macOS: zip ──
@@ -139,19 +145,21 @@ jobs:
         body: |
           ## OmniTerm ${{ github.ref_name }}
 
-          Modern terminal emulator with native RTL support, Arabic shaping, and unified terminal screen.
+          Modern cross-platform terminal emulator with native RTL support, Arabic shaping, and unified terminal screen.
 
           ### Downloads
           | Platform | File | Description |
           |----------|------|-------------|
           | **Windows (x64)** | `OmniTerm-windows-x64.zip` | Standalone binary |
+          | **Windows (ARM64)** | `OmniTerm-windows-arm64.zip` | Standalone binary |
           | **Linux (x64)** | `OmniTerm-linux-x64.tar.gz` | Standalone binary |
+          | **Linux (ARM64)** | `OmniTerm-linux-arm64.tar.gz` | Standalone binary |
           | **macOS (Intel x64)** | `OmniTerm-macos-x64.zip` | Intel binary |
           | **macOS (ARM64)** | `OmniTerm-macos-arm64.zip` | Apple Silicon binary |
 
           ### Requirements
           - No Python installation required.
-          - Windows 10+ (x64), Linux (x64), macOS 11+ (ARM64)
+          - Windows 10+ (x64/ARM64), Linux (x64/ARM64), macOS 11+ (x64/ARM64)
         files: |
           release_files/*
         draft: false
