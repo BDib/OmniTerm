@@ -79,7 +79,7 @@ jobs:
     - name: Windows Post-Build
       if: matrix.platform == 'windows'
       run: |
-        Compress-Archive -Path dist/pyOmniTerm-win10-x64.exe -DestinationPath dist/OmniTerm-windows-x64.zip
+        Compress-Archive -Path dist/OmniTerm-windows-x64.exe -DestinationPath dist/OmniTerm-windows-x64.zip
         choco install innosetup -y --no-progress
         & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\omniterm.iss
         Compress-Archive -Path installer/installer_output/OmniTermSetup-win10-x64.exe -DestinationPath dist/OmniTermSetup-windows-x64.zip
@@ -90,7 +90,7 @@ jobs:
       if: matrix.platform == 'linux'
       run: |
         cd dist
-        tar -czf OmniTerm-linux-x64.tar.gz pyOmniTerm*
+        tar -czf OmniTerm-linux-x64.tar.gz OmniTerm-windows-x64
       shell: bash
 
     # ── macOS: zip ──
@@ -98,7 +98,7 @@ jobs:
       if: matrix.platform == 'macos'
       run: |
         cd dist
-        zip -r OmniTerm-macos-arm64.zip pyOmniTerm*
+        zip -r OmniTerm-macos-arm64.zip OmniTerm-windows-x64
       shell: bash
 
     - name: Upload Build Artifacts
