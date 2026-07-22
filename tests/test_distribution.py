@@ -130,7 +130,7 @@ def test_ci_workflow_exists():
     assert ci.is_file()
     content = ci.read_text()
     assert "python-version" in content
-    assert "run_all" in content
+    assert "pytest" in content
     assert "pyinstaller" in content
     print("  PASS: CI workflow exists")
 

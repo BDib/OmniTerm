@@ -1,4 +1,11 @@
+# Runtime dependencies
 PyQt6>=6.7
 toml>=0.10
 paramiko>=3.0
 pyserial>=3.5
+
+# Dev / build dependencies
+pytest>=7.0
+ruff>=0.4
+pyinstaller>=6.0
+nuitka>=2.0
