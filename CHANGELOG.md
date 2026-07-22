@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.1.6 — Session 9 (2026-07-22)
+
+### Fix: Arrow keys echoing VT sequences, Tab focus jump
+- **Arrow keys** — No longer forwarded as VT escape sequences to the shell. Cmd.exe handles its own line editing natively. QTextEdit handles arrow keys for cursor movement in the input area.
+- **Tab** — Now consumed by the event filter so focus stays in the input area. Tab character is forwarded to the shell for completion.
+- **Backspace, Delete, Escape, Ctrl combos** — Still forwarded to the shell for proper terminal behavior.
+- Cleaned up unused `_forward_key` method.
+- Updated test: `test_history_forwarded_to_shell` → `test_history_not_forwarded`.
+
+---
+
 ## v2.1.5 — Session 9 (2026-07-22)
 
 ### Fix: Echo feedback loop creating junk files

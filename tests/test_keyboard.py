@@ -159,21 +159,20 @@ def test_focus_on_input():
     print("  PASS: Focus goes to input")
 
 
-# ── History (handled by the shell, not local) ──────────────────────
+# ── History (handled by QTextEdit, not forwarded) ─────────────────
 
 
-def test_history_forwarded_to_shell():
-    """Up/Down arrows should be forwarded to the shell for history."""
+def test_history_not_forwarded():
+    """Up/Down arrows should NOT be forwarded to shell (cmd.exe handles natively)."""
     from PyQt6.QtCore import Qt
     w, engine, app = _make_widget()
-    # Send Up arrow to the INPUT widget (where eventFilter lives)
+    # Send Up arrow — should NOT be forwarded to shell
     _send(w._input, app, Qt.Key.Key_Up)
-    assert _last(engine) == "\x1b[A", f"Up should send \\x1b[A, got {_last(engine)!r}"
-    # Send Down arrow
-    engine.flush()
+    assert _last(engine) is None, f"Up should not be forwarded, got {_last(engine)!r}"
+    # Send Down arrow — should NOT be forwarded to shell
     _send(w._input, app, Qt.Key.Key_Down)
-    assert _last(engine) == "\x1b[B", f"Down should send \\x1b[B, got {_last(engine)!r}"
-    print("  PASS: History forwarded to shell")
+    assert _last(engine) is None, f"Down should not be forwarded, got {_last(engine)!r}"
+    print("  PASS: Arrow keys not forwarded (QTextEdit handles them)")
 
 
 # ── Theme ────────────────────────────────────────────────────────────
@@ -218,7 +217,7 @@ def run_all():
     test_focus_on_input()
     print()
     print("  History:")
-    test_history_forwarded_to_shell()
+    test_history_not_forwarded()
     print()
     print("  Theme:")
     test_theme_applies()

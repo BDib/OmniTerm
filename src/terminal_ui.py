@@ -124,110 +124,60 @@ class TerminalWidget(QWidget):
     # ── Send command ──────────────────────────────────────────────────
 
     def eventFilter(self, obj, event):
-        """Intercept navigation keys in the input QTextEdit.
+        """Intercept key events in the input QTextEdit.
 
-        Text entry is handled by QTextEdit natively (characters appear
-        in the input area).  Only navigation keys are forwarded to the
-        shell so the shell can track cursor position for line editing.
+        Text entry is handled by QTextEdit natively.
+        Enter sends command, Tab is consumed to prevent focus change,
+        Ctrl combos are forwarded to the shell.
         """
         from PyQt6.QtCore import QEvent
         if obj is self._input and event.type() == QEvent.Type.KeyPress:
             key = event.key()
+            mods = event.modifiers()
+            ctrl = mods & Qt.KeyboardModifier.ControlModifier
+
             # Enter sends command
             if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
                 self._on_enter()
                 return True
-            # Navigation keys — forward to shell, consume so QTextEdit
-            # doesn't also move its own cursor
-            nav_keys = {
-                Qt.Key.Key_Up, Qt.Key.Key_Down,
-                Qt.Key.Key_Left, Qt.Key.Key_Right,
-                Qt.Key.Key_Home, Qt.Key.Key_End,
-                Qt.Key.Key_PageUp, Qt.Key.Key_PageDown,
-            }
-            if key in nav_keys and self.parent_engine and self.parent_engine.is_ready:
-                self._forward_key(event)
-                return True  # consume — don't let QTextEdit move its cursor
-        return False  # let QTextEdit handle everything else (text entry)
 
-    def _forward_key(self, event):
-        """Map a QKeyEvent to VT escape sequences and send to the shell."""
-        key = event.key()
-        text = event.text()
-        mods = event.modifiers()
-        w = self.parent_engine.write
+            # Tab — forward to shell, consume so focus doesn't jump
+            if key == Qt.Key.Key_Tab and self.parent_engine and self.parent_engine.is_ready:
+                self.parent_engine.write("\t")
+                return True
 
-        # ── Ctrl combinations ──
-        if mods & Qt.KeyboardModifier.ControlModifier:
-            ctrl = {
-                Qt.Key.Key_C: "\x03", Qt.Key.Key_D: "\x04",
-                Qt.Key.Key_Z: "\x1a", Qt.Key.Key_L: "\x0c",
-                Qt.Key.Key_A: "\x01", Qt.Key.Key_E: "\x05",
-                Qt.Key.Key_K: "\x0b", Qt.Key.Key_U: "\x15",
-                Qt.Key.Key_W: "\x17", Qt.Key.Key_S: "\x13",
-            }
-            if key in ctrl:
-                w(ctrl[key])
-                return
-            # Ctrl+arrow word-movement
-            arrow_map = {Qt.Key.Key_Up: "A", Qt.Key.Key_Down: "B",
-                         Qt.Key.Key_Right: "C", Qt.Key.Key_Left: "D"}
-            if key in arrow_map:
-                w(f"\x1b[1;5{arrow_map[key]}")
-                return
-            return
+            # Ctrl combos — forward to shell, consume
+            if ctrl and self.parent_engine and self.parent_engine.is_ready:
+                ctrl_map = {
+                    Qt.Key.Key_C: "\x03", Qt.Key.Key_D: "\x04",
+                    Qt.Key.Key_Z: "\x1a", Qt.Key.Key_L: "\x0c",
+                    Qt.Key.Key_A: "\x01", Qt.Key.Key_E: "\x05",
+                    Qt.Key.Key_K: "\x0b", Qt.Key.Key_U: "\x15",
+                    Qt.Key.Key_W: "\x17",
+                }
+                if key in ctrl_map:
+                    self.parent_engine.write(ctrl_map[key])
+                    return True
 
-        # ── Backspace ──
-        if key == Qt.Key.Key_Backspace:
-            w("\x7f")
-            return
+            # Backspace — forward to shell
+            if key == Qt.Key.Key_Backspace and self.parent_engine and self.parent_engine.is_ready:
+                self.parent_engine.write("\x7f")
+                return True
 
-        # ── Tab ──
-        if key == Qt.Key.Key_Tab:
-            w("\t")
-            return
+            # Delete — forward to shell
+            if key == Qt.Key.Key_Delete and self.parent_engine and self.parent_engine.is_ready:
+                self.parent_engine.write("\x1b[3~")
+                return True
 
-        # ── Delete ──
-        if key == Qt.Key.Key_Delete:
-            w("\x1b[3~")
-            return
+            # Escape — forward to shell
+            if key == Qt.Key.Key_Escape and self.parent_engine and self.parent_engine.is_ready:
+                self.parent_engine.write("\x1b")
+                return True
 
-        # ── Insert ──
-        if key == Qt.Key.Key_Insert:
-            w("\x1b[2~")
-            return
+            # Arrow keys, Home, End, PageUp/Down — let QTextEdit handle
+            # (forwarding VT sequences causes echo issues with cmd.exe)
 
-        # ── Arrow keys ──
-        arrow = {Qt.Key.Key_Up: "A", Qt.Key.Key_Down: "B",
-                 Qt.Key.Key_Right: "C", Qt.Key.Key_Left: "D"}
-        if key in arrow:
-            w(f"\x1b[{arrow[key]}")
-            return
-
-        # ── Home / End ──
-        if key == Qt.Key.Key_Home:
-            w("\x1b[H")
-            return
-        if key == Qt.Key.Key_End:
-            w("\x1b[F")
-            return
-
-        # ── Page Up / Page Down ──
-        if key == Qt.Key.Key_PageUp:
-            w("\x1b[5~")
-            return
-        if key == Qt.Key.Key_PageDown:
-            w("\x1b[6~")
-            return
-
-        # ── Escape ──
-        if key == Qt.Key.Key_Escape:
-            w("\x1b")
-            return
-
-        # ── Printable characters ──
-        if text:
-            w(text)
+        return False  # let QTextEdit handle everything else
 
     def _input_text(self) -> str:
         """Get plain text from the input QTextEdit."""
