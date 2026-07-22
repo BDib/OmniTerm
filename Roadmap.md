@@ -1,6 +1,19 @@
 # OmniTerm Roadmap
 
-A Windows-focused development plan for building OmniTerm into a full-featured terminal emulator.
+A cross-platform development plan for building OmniTerm into a full-featured terminal emulator.
+
+---
+
+## Current Status — v2.3.0
+
+### Completed
+- Unified TerminalScreen widget (single-pane architecture)
+- ConPTY backend with two-pipe architecture (Windows)
+- Unix PTY backend (Linux/macOS)
+- Arabic character shaping + bidirectional text
+- Dynamic i18n (English/Arabic)
+- Cross-platform CI: Windows x64/ARM64, Linux x64/ARM64, macOS x64/ARM64
+- 139 tests passing
 
 ---
 

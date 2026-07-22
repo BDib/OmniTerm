@@ -83,13 +83,15 @@ All tests must pass before submitting a PR. Tests run on Python 3.10-3.13 via Gi
 
 ## Architecture Notes
 
+- **Unified TerminalScreen** (`terminal_ui.py`) — Single QTextEdit that intercepts all keyboard events and forwards them to the PTY, like real terminal emulators
 - **ConPTY backend** (`conpty.py`) — Windows Pseudo Console API via ctypes, uses two separate pipes (input + output) to prevent echo loops
-- **TerminalWidget** uses a QWidget with QTextEdit (output) + QTextEdit (input)
-- Output is append-only — the shell handles all cursor movement and line editing
-- ANSI parsing happens in `ansi_parser.py`, rendering in `ansi_renderer.py`
-- The engine (`terminal_core.py`) manages ConPTY/SSH/Serial sessions with threaded I/O
+- **Unix PTY backend** (`unix_pty.py`) — Cross-platform PTY using Python's `pty` module for Linux/macOS
+- **Arabic shaping + bidi** — Dynamic Arabic character reshaping via `arabic-reshaper` and bidirectional text via `python-bidi`
+- **i18n** (`i18n.py`) — English/Arabic language switching with runtime menu translation
+- **ANSI parsing** (`ansi_parser.py` + `ansi_renderer.py`) — Full SGR parser with 256-color and true-color support
+- The engine (`terminal_core.py`) manages ConPTY/Unix PTY/SSH/Serial sessions
 - Configuration is in `settings.toml`, loaded by `config.py`
-- 143 tests across 12 test suites, run with `python -m pytest tests/`
+- 139 tests across 12 test suites, run with `python -m pytest tests/`
 
 ## Reporting Issues
 
