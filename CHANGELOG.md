@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.1.5 — Session 9 (2026-07-22)
+
+### Fix: Echo feedback loop creating junk files
+- **Root cause** — ConPTY used a single pipe for both input and output. The host read its own input back from the pipe, which was fed into the shell as commands. Shell output fragments became filenames.
+- **Fix** — Use TWO separate pipes: one for input (host → shell), one for output (shell → host). This isolates the data flow and eliminates the echo loop.
+- Verified working in Python, Nuitka, and PyInstaller builds — no junk files created.
+
+---
+
 ## v2.1.4 — Session 9 (2026-07-22)
 
 ### Fix: Input not reaching ConPTY shell
