@@ -27,7 +27,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pyinstaller
+        pip install pyinstaller pytest
 
     - name: Lint with ruff
       run: |
@@ -35,7 +35,7 @@ jobs:
         ruff check src/ tests/ --select E402,F || true
 
     - name: Run tests
-      run: python -m tests.run_all
+      run: python -m pytest tests/ -q
       timeout-minutes: 3
       env:
         QT_QPA_PLATFORM: offscreen
@@ -71,7 +71,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pyinstaller
+        pip install pyinstaller pytest
 
     - name: Build with PyInstaller
       run: pyinstaller OmniTerm.spec --noconfirm
@@ -110,6 +110,6 @@ jobs:
           ```
         files: |
           dist/pyOmniTerm-win10-x64.exe
-          installer_output/OmniTermSetup-win10-x64.exe
+          installer/installer_output/OmniTermSetup-win10-x64.exe
         draft: false
         prerelease: false
