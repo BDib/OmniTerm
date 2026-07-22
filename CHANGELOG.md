@@ -1,5 +1,13 @@
 # Changelog
 
+## v2.1.4 — Session 9 (2026-07-22)
+
+### Fix: Input not reaching ConPTY shell
+- **Root cause** — `TerminalEngine.write()` put data into `input_queue`, but ConPTY has no writer thread consuming that queue. Data was silently dropped.
+- **Fix** — When using ConPTY, `write()` now calls `self._conpty.write()` directly instead of using the queue.
+
+---
+
 ## v2.1.3 — Session 9 (2026-07-22)
 
 ### Fix: Missing PROCESS_INFORMATION struct

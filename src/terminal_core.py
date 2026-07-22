@@ -241,7 +241,10 @@ class TerminalEngine:
 
     def write(self, data: str) -> None:
         if self.alive:
-            self.input_queue.put(data)
+            if self._conpty:
+                self._conpty.write(data)
+            else:
+                self.input_queue.put(data)
 
     def resize(self, width: int, height: int) -> None:
         if self.ssh:
