@@ -437,6 +437,45 @@ class TerminalWidget(QWidget):
         self._output.setTextCursor(cursor)
         self._output.ensureCursorVisible()
 
+    # ── Save / Export ────────────────────────────────────────────────
+
+    def save_output_html(self, filepath: str) -> None:
+        """Export terminal output as HTML with theme colors preserved."""
+        from datetime import datetime
+        theme = self._theme
+        html = self._output.toHtml()
+        # Wrap in a themed HTML document
+        styled_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>OmniTerm Export — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</title>
+<style>
+body {{
+    background-color: {theme.background};
+    color: {theme.foreground};
+    font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+    font-size: 14px;
+    padding: 20px;
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}}
+</style>
+</head>
+<body>
+{html}
+</body>
+</html>"""
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(styled_html)
+
+    def save_output_text(self, filepath: str) -> None:
+        """Export terminal output as plain text."""
+        text = self._output.toPlainText()
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(text)
+
     # ── Focus proxy ────────────────────────────────────────────────────
 
     def setFocus(self, reason=Qt.FocusReason.OtherFocusReason):
@@ -728,6 +767,9 @@ class MainWindow(QMainWindow):
         self._action_profile_picker = _act(self._file_menu, "", self._profile_picker, "Ctrl+Shift+N")
         self._action_manage_profiles = _act(self._file_menu, "", self._manage_profiles)
         self._file_menu.addSeparator()
+        self._action_save_html = _act(self._file_menu, "Save Output as HTML...", self._save_output_html, "Ctrl+Shift+H")
+        self._action_save_text = _act(self._file_menu, "Save Output as Text...", self._save_output_text, "Ctrl+Shift+S")
+        self._file_menu.addSeparator()
         self._action_exit = _act(self._file_menu, "", self.close, "Alt+F4")
 
         self._edit_menu = menu.addMenu("")
@@ -783,6 +825,8 @@ class MainWindow(QMainWindow):
         self._action_close_tab.setText(t("menu_close_tab", lang))
         self._action_profile_picker.setText(t("menu_profile_picker", lang))
         self._action_manage_profiles.setText(t("menu_manage_profiles", lang))
+        self._action_save_html.setText(t("menu_save_html", lang))
+        self._action_save_text.setText(t("menu_save_text", lang))
         self._action_exit.setText(t("menu_exit", lang))
 
         self._edit_menu.setTitle(t("menu_edit", lang))
@@ -878,7 +922,13 @@ class MainWindow(QMainWindow):
             widget = self._tabs.widget(i)
             if isinstance(widget, TerminalWidget):
                 widget._output.setLayoutDirection(new_dir)
-                widget._output.setAlignment(new_align)
+                # Set alignment for all blocks
+                cursor = widget._output.textCursor()
+                cursor.select(QTextCursor.SelectionType.Document)
+                block_fmt = cursor.blockFormat()
+                block_fmt.setAlignment(new_align)
+                cursor.setBlockFormat(block_fmt)
+                widget._output.setTextCursor(cursor)
 
     # ── Tab management ─────────────────────────────────────────────────
 
@@ -910,6 +960,36 @@ class MainWindow(QMainWindow):
         idx = self._tabs.currentIndex()
         if idx >= 0:
             self._close_tab(idx)
+
+    # ── Save / Export ────────────────────────────────────────────────
+
+    def _save_output_html(self) -> None:
+        """Save current terminal output as HTML with theme colors."""
+        from PyQt6.QtWidgets import QFileDialog
+        from datetime import datetime
+        ts = datetime.now().strftime('%Y%m%d-%H%M%S')
+        default_name = f"omniterm-export-{ts}.html"
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Save Output as HTML", default_name,
+            "HTML Files (*.html);;All Files (*)")
+        if filepath:
+            widget = self._tabs.currentWidget()
+            if isinstance(widget, TerminalWidget):
+                widget.save_output_html(filepath)
+
+    def _save_output_text(self) -> None:
+        """Save current terminal output as plain text."""
+        from PyQt6.QtWidgets import QFileDialog
+        from datetime import datetime
+        ts = datetime.now().strftime('%Y%m%d-%H%M%S')
+        default_name = f"omniterm-export-{ts}.txt"
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Save Output as Text", default_name,
+            "Text Files (*.txt);;All Files (*)")
+        if filepath:
+            widget = self._tabs.currentWidget()
+            if isinstance(widget, TerminalWidget):
+                widget.save_output_text(filepath)
 
     def _next_tab(self) -> None:
         count = self._tabs.count()
