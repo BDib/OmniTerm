@@ -432,6 +432,9 @@ class TerminalWidget(QWidget):
     @pyqtSlot(str)
     def show_exit_message(self, text: str):
         try:
+            # Check if widget is still in the widget tree
+            if not self.parent():
+                return
             cursor = self._output.textCursor()
             cursor.movePosition(QTextCursor.MoveOperation.End)
             cursor.insertText(f"\n{text}\n")
@@ -924,24 +927,30 @@ class MainWindow(QMainWindow):
         cursor.setBlockFormat(block_fmt)
 
     def _toggle_rtl_window(self):
-        """Manually toggle the entire OmniTerm layout direction and align text in the terminals."""
+        """Manually toggle the entire OmniTerm layout direction."""
         if self.layoutDirection() == Qt.LayoutDirection.RightToLeft:
             new_dir = Qt.LayoutDirection.LeftToRight
-            new_align = Qt.AlignmentFlag.AlignLeft
         else:
             new_dir = Qt.LayoutDirection.RightToLeft
-            new_align = Qt.AlignmentFlag.AlignRight
 
         self.setLayoutDirection(new_dir)
         for i in range(self._tabs.count()):
             widget = self._tabs.widget(i)
             if isinstance(widget, TerminalWidget):
+                # Set widget layout direction — this moves the text visually
                 widget._output.setLayoutDirection(new_dir)
-                # Set alignment for all blocks
+                widget._input.setLayoutDirection(new_dir)
+                # Set document-level text direction for proper rendering
+                widget._output.document().setDefaultTextDirection(new_dir)
+                # Also set alignment on all blocks
                 cursor = widget._output.textCursor()
                 cursor.select(QTextCursor.SelectionType.Document)
                 block_fmt = cursor.blockFormat()
-                block_fmt.setAlignment(new_align)
+                block_fmt.setLayoutDirection(new_dir)
+                if new_dir == Qt.LayoutDirection.RightToLeft:
+                    block_fmt.setAlignment(Qt.AlignmentFlag.AlignRight)
+                else:
+                    block_fmt.setAlignment(Qt.AlignmentFlag.AlignLeft)
                 cursor.setBlockFormat(block_fmt)
                 widget._output.setTextCursor(cursor)
 

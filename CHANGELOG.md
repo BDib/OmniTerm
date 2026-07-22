@@ -1,5 +1,21 @@
 # Changelog
 
+## v2.4.1 — Session 9 (2026-07-22)
+
+### Fix: RTL alignment in app
+- Fixed `_toggle_rtl_window` to use `document().setDefaultTextDirection()` for proper visual text movement
+- Added `setLayoutDirection()` on both output and input widgets
+- Set block layout direction and alignment together
+
+### Fix: Exit/close crash diagnosis
+- Added `faulthandler` to dump traceback on segfault/SIGFPE
+- Added signal handlers for SIGTERM/SIGINT
+- ConPTY `kill()` no longer closes pipe handles (let OS clean up)
+- `show_exit_message` checks if widget is still in tree before accessing
+- All crash paths now log to errors.txt
+
+---
+
 ## v2.4.0 — Session 9 (2026-07-22)
 
 ### Save / Export Output

@@ -1,6 +1,8 @@
 import sys
 import os
 import traceback
+import faulthandler
+import signal
 import argparse
 import logging
 from pathlib import Path
@@ -16,11 +18,17 @@ from terminal_ui import MainWindow  # noqa: E402
 
 # ── Error logging — only created on crash or --verbose ──────────────
 if getattr(sys, "frozen", False):
-    # For onefile builds, CWD is where the user ran the exe from
     _app_dir = os.getcwd()
 else:
     _app_dir = os.getcwd()
 _log_path = os.path.join(_app_dir, "errors.txt")
+
+# Enable faulthandler to dump traceback on segfault/SIGFPE/etc.
+try:
+    _fault_log = open(_log_path, "a", encoding="utf-8")
+    faulthandler.enable(file=_fault_log)
+except Exception:
+    faulthandler.enable()
 
 
 def _write_log(msg: str):
@@ -43,6 +51,15 @@ def _excepthook(exc_type, exc_value, exc_tb):
         pass
 
 sys.excepthook = _excepthook
+
+
+def _signal_handler(signum, frame):
+    """Log when killed by signal."""
+    _write_log(f"Received signal {signum}, exiting...")
+    sys.exit(128 + signum)
+
+signal.signal(signal.SIGTERM, _signal_handler)
+signal.signal(signal.SIGINT, _signal_handler)
 
 
 def parse_args():
