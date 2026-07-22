@@ -109,15 +109,19 @@ class ConPTYEngine(QObject):
                     k32.TerminateProcess(s.h_process, 0)
                 except Exception:
                     pass
-            # Close process/thread handles (safe — read loop checks _alive)
+            # Close read pipe to unblock _read_loop's ReadFile call
+            if s.h_read:
+                try:
+                    k32.CloseHandle(s.h_read)
+                except Exception:
+                    pass
+            # Close process/thread/console handles
             for h in (s.h_process, s.h_thread, s.h_console):
                 if h:
                     try:
                         k32.CloseHandle(h)
                     except Exception:
                         pass
-            # Don't close pipe handles here — let OS clean up when process exits
-            # The read loop will break when the pipe closes naturally
 
     def _create_console(self, cmd: str, w: int, h: int, cwd: str | None = None) -> ConPTYSession:
         s = ConPTYSession()

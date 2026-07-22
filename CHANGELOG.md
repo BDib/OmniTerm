@@ -1,5 +1,17 @@
 # Changelog
 
+## v2.4.2 — Session 9 (2026-07-22)
+
+### Fix: RTL toggle crash
+- Removed reference to non-existent `_input` attribute (Jules' unified terminal removed it)
+- `_toggle_rtl_window` and `_toggle_rtl_line` now only reference `_output`
+
+### Fix: Exit not closing tab
+- ConPTY `kill()` now closes the read pipe handle to unblock `_read_loop`'s `ReadFile` call
+- This ensures the `exited` signal is emitted when the shell exits
+
+---
+
 ## v2.4.1 — Session 9 (2026-07-22)
 
 ### Fix: RTL alignment in app

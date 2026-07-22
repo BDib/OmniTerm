@@ -925,6 +925,7 @@ class MainWindow(QMainWindow):
             block_fmt.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
             block_fmt.setAlignment(Qt.AlignmentFlag.AlignRight)
         cursor.setBlockFormat(block_fmt)
+        widget._output.setTextCursor(cursor)
 
     def _toggle_rtl_window(self):
         """Manually toggle the entire OmniTerm layout direction."""
@@ -939,10 +940,9 @@ class MainWindow(QMainWindow):
             if isinstance(widget, TerminalWidget):
                 # Set widget layout direction — this moves the text visually
                 widget._output.setLayoutDirection(new_dir)
-                widget._input.setLayoutDirection(new_dir)
                 # Set document-level text direction for proper rendering
                 widget._output.document().setDefaultTextDirection(new_dir)
-                # Also set alignment on all blocks
+                # Set alignment on all blocks
                 cursor = widget._output.textCursor()
                 cursor.select(QTextCursor.SelectionType.Document)
                 block_fmt = cursor.blockFormat()
