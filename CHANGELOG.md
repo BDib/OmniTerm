@@ -1,5 +1,25 @@
 # Changelog
 
+## v2.4.0 — Session 9 (2026-07-22)
+
+### Save / Export Output
+- **Save as HTML** (Ctrl+Shift+H) — Preserves theme colors via inline CSS, timestamped filenames
+- **Save as Text** (Ctrl+Shift+S) — Plain text export, timestamped filenames
+- Added English/Arabic translations for new menu items
+
+### RTL Alignment Fix
+- Fixed `_toggle_rtl_window` to set block alignment on all blocks (was using `setAlignment` which doesn't persist)
+
+### Shutdown Safety
+- Added `_closing` flag to prevent race conditions during shutdown
+- ConPTY `kill()` safe to call multiple times (`_killed` flag)
+- All engine cleanup wrapped in try/except
+
+### CI/CD
+- Added Windows ARM64 and Linux ARM64 builds (6 platforms total)
+
+---
+
 ## v2.3.0 — Session 9 (2026-07-22)
 
 ### CI/CD: Full cross-platform builds
