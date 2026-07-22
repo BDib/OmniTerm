@@ -657,7 +657,7 @@ class MainWindow(QMainWindow):
         full_cmd = profile.command
         if profile.args:
             full_cmd = f"{profile.command} {' '.join(profile.args)}"
-        self.new_tab(shell=full_cmd, admin=profile.admin)
+        self.new_tab(shell=full_cmd, admin=profile.admin, cwd=profile.working_dir)
 
     def _launch_as_admin(self, profile):
         """Relaunch OmniTerm as admin, auto-opening the given profile."""
