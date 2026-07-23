@@ -19,6 +19,11 @@ EXTENDED_STARTUPINFO_PRESENT_FLAG = 0x00080000
 STARTF_USESTDHANDLES = 0x00000100
 
 k32 = ctypes.windll.kernel32
+# ClosePseudoConsole is needed to properly release conhost.exe
+try:
+    _ClosePseudoConsole = k32.ClosePseudoConsole
+except AttributeError:
+    _ClosePseudoConsole = None
 
 
 def _elog(msg: str):
@@ -113,17 +118,21 @@ class ConPTYEngine(QObject):
                     k32.TerminateProcess(s.h_process, 0)
                 except Exception:
                     pass
-            # Close process/thread/console handles
-            for h in (s.h_process, s.h_thread, s.h_console):
+            # Close pipe handles first to unblock ReadFile in _read_loop
+            for h in (s.h_read, s.h_write):
                 if h:
                     try:
                         k32.CloseHandle(h)
                     except Exception:
                         pass
-            # Close pipe handles to unblock ReadFile in _read_loop.
-            # The read loop catches the ERROR_OPERATION_ABORTED / broken-pipe
-            # error and exits cleanly.
-            for h in (s.h_read, s.h_write):
+            # Close pseudo console — this releases conhost.exe
+            if s.h_console and _ClosePseudoConsole:
+                try:
+                    _ClosePseudoConsole(s.h_console)
+                except Exception:
+                    pass
+            # Close process/thread handles
+            for h in (s.h_process, s.h_thread):
                 if h:
                     try:
                         k32.CloseHandle(h)
