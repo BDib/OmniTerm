@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.5.0 — Session 10 (2026-07-23)
+
+### Fix: Exit/close reliability
+- **Root cause**: `_on_tab_process_exited` returned early when `_closing` was True, preventing tab cleanup during window close. Also, `deleteLater()` was called after `removeTab()` causing signal delivery issues.
+- **Fix**: Removed `_closing` check from `_on_tab_process_exited` so it always attempts to close tabs. Reordered `_close_tab` to call `deleteLater()` before `removeTab()`.
+- **Fix**: `_search_next` and `_search_prev` in `TerminalWidget` now correctly access the parent `MainWindow`'s tab widget instead of referencing non-existent `self._tabs`.
+- All 142 tests pass.
+
+---
+
 ## v2.4.4 — Session 9 (2026-07-22)
 
 ### Fix: Exit command not closing tab

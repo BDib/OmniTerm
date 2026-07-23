@@ -286,23 +286,34 @@ class TerminalWidget(QWidget):
 
     def _search_next(self):
         """F3: Open search dialog or find next."""
-        widget = self._tabs.currentWidget()
-        if isinstance(widget, TerminalWidget):
-            if widget._search_dialog and widget._search_dialog.isVisible():
-                widget._search_dialog.find_next()
-            else:
-                self._open_search()
+        if self._search_dialog and self._search_dialog.isVisible():
+            self._search_dialog.find_next()
+        else:
+            # Open search for the current terminal's output
+            window = self.window()
+            if isinstance(window, MainWindow):
+                widget = window._tabs.currentWidget()
+                if isinstance(widget, TerminalWidget):
+                    if widget._search_dialog and widget._search_dialog.isVisible():
+                        widget._search_dialog.find_next()
+                    else:
+                        window._open_search()
 
     def _search_prev(self):
         """Shift+F3: Find previous."""
-        widget = self._tabs.currentWidget()
-        if isinstance(widget, TerminalWidget):
-            if widget._search_dialog and widget._search_dialog.isVisible():
-                widget._search_dialog.find_prev()
-            else:
-                self._open_search()
-                if widget._search_dialog:
-                    widget._search_dialog.find_prev()
+        if self._search_dialog and self._search_dialog.isVisible():
+            self._search_dialog.find_prev()
+        else:
+            window = self.window()
+            if isinstance(window, MainWindow):
+                widget = window._tabs.currentWidget()
+                if isinstance(widget, TerminalWidget):
+                    if widget._search_dialog and widget._search_dialog.isVisible():
+                        widget._search_dialog.find_prev()
+                    else:
+                        window._open_search()
+                        if widget._search_dialog:
+                            widget._search_dialog.find_prev()
 
     # ── Opacity ────────────────────────────────────────────────────────
 
@@ -977,9 +988,10 @@ class MainWindow(QMainWindow):
                     pass
                 engine.kill()
 
-            self._tabs.removeTab(index)
+            # Delete widget before removing tab to prevent signal delivery issues
             if widget:
                 widget.deleteLater()
+            self._tabs.removeTab(index)
         except Exception as exc:
             import traceback, os, sys
             try:
@@ -1044,8 +1056,6 @@ class MainWindow(QMainWindow):
 
     def _on_tab_process_exited(self, terminal: TerminalWidget) -> None:
         """Close the tab when the shell process exits."""
-        if self._closing:
-            return
         try:
             idx = self._tabs.indexOf(terminal)
             if idx >= 0:
