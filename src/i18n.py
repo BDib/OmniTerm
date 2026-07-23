@@ -44,6 +44,14 @@ _TRANSLATIONS = {
         "restart_shell": "Restart Shell",
         "menu_help": "&Help",
         "menu_about": "&About OmniTerm",
+        "about_title": "About OmniTerm v{version}",
+        "about_body": "<h3>OmniTerm v{version}</h3>"
+                      "<p>A modern, cross-platform terminal emulator built with Python and PyQt6.</p>"
+                      "<p>Features: ConPTY backend, ANSI color rendering, Arabic/bidi support, "
+                      "13 themes, multi-tab, SSH/Serial/WSL integration.</p>"
+                      "<p>License: MIT</p>"
+                      "<p>GitHub: <a href='https://github.com/BDib/OmniTerm'>github.com/BDib/OmniTerm</a></p>"
+                      "<p>Author: BDib (Buddy)</p>",
     },
     "ar": {
         "menu_file": "ملف",
@@ -85,6 +93,14 @@ _TRANSLATIONS = {
         "restart_shell": "إعادة تشغيل الطرفية",
         "menu_help": "مساعدة",
         "menu_about": "حول OmniTerm",
+        "about_title": "حول OmniTerm v{version}",
+        "about_body": "<h3>OmniTerm v{version}</h3>"
+                      "<p>محاكي طرفيات عصري ومتعدد المنصات مبني بـ Python و PyQt6.</p>"
+                      "<p>الميزات: خلفية ConPTY، عرض ألوان ANSI، دعم العربية والنص ثنائي الاتجاه، "
+                      "13 سمة، علامات تبويب متعددة، تكامل SSH/_serial/WSL.</p>"
+                      "<p>الرخصة: MIT</p>"
+                      "<p>GitHub: <a href='https://github.com/BDib/OmniTerm'>github.com/BDib/OmniTerm</a></p>"
+                      "<p>المؤلف: BDib (Buddy)</p>",
     }
 }
 

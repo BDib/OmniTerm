@@ -931,17 +931,11 @@ class MainWindow(QMainWindow):
 
     def _show_about(self):
         """Show the About dialog."""
-        QMessageBox.about(
-            self,
-            f"About OmniTerm v{VERSION}",
-            f"<h3>OmniTerm v{VERSION}</h3>"
-            "<p>A modern, cross-platform terminal emulator built with Python and PyQt6.</p>"
-            "<p>Features: ConPTY backend, ANSI color rendering, Arabic/bidi support, "
-            "13 themes, multi-tab, SSH/Serial/WSL integration.</p>"
-            "<p>License: MIT</p>"
-            "<p>GitHub: <a href='https://github.com/BDib/OmniTerm'>github.com/BDib/OmniTerm</a></p>"
-            "<p>Author: BDib (Buddy)</p>"
-        )
+        from i18n import t
+        lang = self._cfg.ui.language if self._cfg else "en"
+        title = t("about_title", lang).format(version=VERSION)
+        body = t("about_body", lang).format(version=VERSION)
+        QMessageBox.about(self, title, body)
 
     def _toggle_rtl_line(self):
         """Manually toggle the current output line alignment (Right-to-Left / Left-to-Right)."""

@@ -77,8 +77,8 @@ def parse_args():
                         help="Open with a named profile from settings.toml")
     parser.add_argument("--verbose", action="store_true",
                         help="Log startup details to errors.txt")
-    parser.add_argument("--version", "-v", action="version",
-                        version=f"OmniTerm v{VERSION}")
+    parser.add_argument("--version", "-v", action="store_true",
+                        help="Show version and exit")
     parser.add_argument("path", nargs="?", default=None,
                         help="Optional initial working directory path to start OmniTerm in")
     return parser.parse_args()
@@ -86,6 +86,11 @@ def parse_args():
 
 def run():
     args = parse_args()
+
+    if args.version:
+        # For GUI apps, print to stdout (visible when run from terminal)
+        print(f"OmniTerm v{VERSION}")
+        sys.exit(0)
 
     if args.verbose:
         _write_log(f"OmniTerm v{VERSION} starting")
