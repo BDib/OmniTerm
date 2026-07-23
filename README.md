@@ -160,89 +160,23 @@ python src/Main.py --version
 
 ## Building
 
-### Quick Start
+See [BUILD.md](BUILD.md) for detailed build instructions, troubleshooting, and CI/CD details.
 
 ```powershell
-# Default build (Nuitka — fastest)
-.\build.ps1
-
-# Or with cmd
-build.bat
+.\build.ps1              # Nuitka (default, fastest)
+.\build.ps1 pyinstaller  # PyInstaller (fallback)
+.\build.ps1 installer    # Build + Inno Setup installer
+.\build.ps1 clean        # Remove build artifacts
 ```
-
-### Build Options
-
-| Command | Description |
-|---------|-------------|
-| `.\build.ps1` | Nuitka standalone build (default) |
-| `.\build.ps1 pyinstaller` | PyInstaller standalone build |
-| `.\build.ps1 debug` | Nuitka debug build (console visible) |
-| `.\build.ps1 pyinstaller-debug` | PyInstaller debug build |
-| `.\build.ps1 installer` | Nuitka build + Inno Setup installer |
-| `.\build.ps1 clean` | Remove all build artifacts |
-
-### Nuitka vs PyInstaller
-
-| | Nuitka | PyInstaller |
-|---|---|---|
-| **Startup** | ~13ms | ~97ms |
-| **Size** | ~25 MB | ~44 MB |
-| **Build time** | ~5-10 min (first run) | ~30s |
-| **Default** | Yes | Fallback |
-
-### Output Files
-
-| File | Builder | Description |
-|------|---------|-------------|
-| `dist\OmniTerm-win10-x64.exe` | Nuitka | Standalone executable |
-| `dist\pyOmniTerm-win10-x64.exe` | PyInstaller | Standalone executable |
-| `installer_output\OmniTermSetup-win10-x64.exe` | Inno Setup | Windows installer |
-
-### Creating an Installer
-
-```powershell
-# Build + create installer (requires Inno Setup 6)
-.\build.ps1 installer
-```
-
-The installer includes:
-- Installation to Program Files
-- Start Menu and desktop shortcuts
-- Optional .toml file association
-- Uninstaller
-- Post-install launch option
 
 ---
 
 ## Testing
 
 ```bash
-# Run all tests (141 tests across 12 suites)
-python -m pytest tests/ -v
-
-# Run a specific test module
-python -m pytest tests/test_ansi_parser.py -v
-python -m pytest tests/test_config.py -v
-
-# Run with quiet output
-python -m pytest tests/ -q
+python -m pytest tests/ -v    # Run all tests (145 tests across 12 suites)
+python -m pytest tests/ -q    # Quiet output
 ```
-
-### Test Coverage
-
-| Module | Tests | What's Tested |
-|--------|-------|---------------|
-| `test_ansi_parser.py` | 28 | Text, newlines, tabs, SGR (bold/color/256/RGB/reset), cursor movement, erase, OSC, strip_ansi, mouse mode |
-| `test_config.py` | 6 | Default values, file override, partial override, malformed TOML, behavior section |
-| `test_distribution.py` | 11 | Version string, CLI args, spec/build/CI files |
-| `test_keyboard.py` | 14 | Type/enter, engine state, rendering, input editing, focus, history, themes, path label |
-| `test_mouse_scroll.py` | 27 | Mouse enable/disable/priority, press/release/motion/scroll encoding, scroll buffer |
-| `test_profiles.py` | 12 | Profile dataclass, config loading, keybindings, action resolution |
-| `test_rendering.py` | 7 | CR handling, ERASE_DISPLAY, ERASE_LINE, plain mode |
-| `test_serial_wsl.py` | 15 | Serial session, serial dialog, WSL manager, terminal engine |
-| `test_ssh.py` | 9 | SSH session, SSH dialog, terminal engine SSH, keybindings |
-| `test_tabs.py` | 6 | Shell title, tab engines, index management, split orientation |
-| `test_themes.py` | 8 | Theme listing, lookup, ANSI colors, stylesheet generation |
 
 ---
 

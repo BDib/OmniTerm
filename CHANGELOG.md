@@ -1,397 +1,57 @@
 # Changelog
 
-## v2.5.2 — Session 10 (2026-07-23)
+## v2.5.3 (2026-07-23)
+- Removed issue markdown files (tracked as GitHub Issues #3-#6)
+- Version bump to 2.5.3
 
-### Tests: Exit fix verification
-- Added `test_exit_fix.py` with 3 integration tests:
-  - `test_exit_closes_tab` — typing `exit` fires `exited` signal within 3s
-  - `test_kill_unblocks_read_loop` — `kill()` closes pipes and unblocks `ReadFile`
-  - `test_exit_closes_tab_integration` — full `TerminalEngine` + ConPTY signal chain
+## v2.5.2 (2026-07-23)
+- Added exit fix integration tests (test_exit_fix.py)
 - All 145 tests passing
 
----
-
-## v2.5.1 — Session 10 (2026-07-23)
-
-### Fix: Exit command not closing tab (root cause)
-- **Root cause**: `ConPTYEngine.kill()` did not close pipe handles. When user types `exit`, shell terminates but `ReadFile` in `_read_loop` blocks forever on the still-open pipe. The `exited` signal never fires, so the tab never closes.
-- **Fix**: `kill()` now closes pipe handles (`h_read`, `h_write`) after terminating the process. This unblocks `ReadFile` which catches the broken-pipe error and exits cleanly.
-- **Safety net**: Added `GetExitCodeProcess` check in `_read_loop` to detect process termination even if pipe reads stall.
-
----
-
-## v2.5.0 — Session 10 (2026-07-23)
-
-### Fix: Exit/close reliability
-- **Root cause**: `_on_tab_process_exited` returned early when `_closing` was True, preventing tab cleanup during window close. Also, `deleteLater()` was called after `removeTab()` causing signal delivery issues.
-- **Fix**: Removed `_closing` check from `_on_tab_process_exited` so it always attempts to close tabs. Reordered `_close_tab` to call `deleteLater()` before `removeTab()`.
-- **Fix**: `_search_next` and `_search_prev` in `TerminalWidget` now correctly access the parent `MainWindow`'s tab widget instead of referencing non-existent `self._tabs`.
-- All 142 tests pass.
-
----
-
-## v2.4.4 — Session 9 (2026-07-22)
-
-### Fix: Exit command not closing tab
-- **Root cause**: `ReadFile` returns `True` with `read.value == 0` (EOF) when pipe closes, not `False`. Old code only broke on `not ok`, causing infinite retry loop.
-- **Fix**: Break on any non-positive read (both `not ok` and `read.value == 0`)
-
----
-
-## v2.4.3 — Session 9 (2026-07-22)
-
-### Fix: Exit not closing tab + close crash
-- Removed pipe handle closing from `kill()` — closing while `ReadFile` blocks causes C-level crash
-- Added `GetExitCodeProcess` check in `_read_loop` to detect when shell exits
-- Read loop now breaks when process exit code is no longer STILL_ACTIVE
-
----
-
-## v2.4.2 — Session 9 (2026-07-22)
-
-### Fix: RTL toggle crash
-- Removed reference to non-existent `_input` attribute (Jules' unified terminal removed it)
-- `_toggle_rtl_window` and `_toggle_rtl_line` now only reference `_output`
-
-### Fix: Exit not closing tab
-- ConPTY `kill()` now closes the read pipe handle to unblock `_read_loop`'s `ReadFile` call
-- This ensures the `exited` signal is emitted when the shell exits
-
----
-
-## v2.4.1 — Session 9 (2026-07-22)
-
-### Fix: RTL alignment in app
-- Fixed `_toggle_rtl_window` to use `document().setDefaultTextDirection()` for proper visual text movement
-- Added `setLayoutDirection()` on both output and input widgets
-- Set block layout direction and alignment together
-
-### Fix: Exit/close crash diagnosis
-- Added `faulthandler` to dump traceback on segfault/SIGFPE
-- Added signal handlers for SIGTERM/SIGINT
-- ConPTY `kill()` no longer closes pipe handles (let OS clean up)
-- `show_exit_message` checks if widget is still in tree before accessing
-- All crash paths now log to errors.txt
-
----
-
-## v2.4.0 — Session 9 (2026-07-22)
-
-### Save / Export Output
-- **Save as HTML** (Ctrl+Shift+H) — Preserves theme colors via inline CSS, timestamped filenames
-- **Save as Text** (Ctrl+Shift+S) — Plain text export, timestamped filenames
-- Added English/Arabic translations for new menu items
-
-### RTL Alignment Fix
-- Fixed `_toggle_rtl_window` to set block alignment on all blocks (was using `setAlignment` which doesn't persist)
-
-### Shutdown Safety
-- Added `_closing` flag to prevent race conditions during shutdown
-- ConPTY `kill()` safe to call multiple times (`_killed` flag)
-- All engine cleanup wrapped in try/except
-
-### CI/CD
-- Added Windows ARM64 and Linux ARM64 builds (6 platforms total)
-
----
-
-## v2.3.0 — Session 9 (2026-07-22)
-
-### CI/CD: Full cross-platform builds
-- **Windows ARM64** — Added `windows-11-arm` runner for ARM64 builds
-- **Linux ARM64** — Added `ubuntu-24.04-arm` runner for ARM64 builds
-- **macOS Intel x64** — Using `macos-15-intel` runner (replaces deprecated `macos-13`)
-- **macOS ARM64** — `macos-14` runner (unchanged)
-- Total: 6 platform builds (Windows x64/ARM64, Linux x64/ARM64, macOS x64/ARM64)
-
-### README
-- Updated description to reflect cross-platform nature and unified terminal architecture
-
----
-
-## v2.2.0 — Session 9 (2026-07-22)
-
-### Unified Terminal Widget (major)
-- **Single TerminalScreen widget** replaces dual-pane layout — behaves like a real terminal
-- **Arabic shaping + bidi** — Dynamic Arabic character reshaping and bidirectional text
-- **Cross-platform PTY** — Windows (ConPTY), Linux/macOS (pty module)
-- **Dynamic i18n** — English/Arabic language switching
-- **CWD path resolution** — Smart working directory detection via `--path` argument
-- **BACKSPACE fix** — `deleteChar()` → `deletePreviousChar()` (correct backward delete)
-
-### CI/CD
-- Multi-platform builds: Windows x64, Linux x64, macOS x64, macOS ARM64
-- Removed deprecated `macos-13` runner, using `macos-15-intel` for Intel builds
-
----
-
-## v2.1.6 — Session 9 (2026-07-22)
-
-### Fix: Arrow keys echoing VT sequences, Tab focus jump
-- **Arrow keys** — No longer forwarded as VT escape sequences to the shell. Cmd.exe handles its own line editing natively. QTextEdit handles arrow keys for cursor movement in the input area.
-- **Tab** — Now consumed by the event filter so focus stays in the input area. Tab character is forwarded to the shell for completion.
-- **Backspace, Delete, Escape, Ctrl combos** — Still forwarded to the shell for proper terminal behavior.
-- Cleaned up unused `_forward_key` method.
-- Updated test: `test_history_forwarded_to_shell` → `test_history_not_forwarded`.
-
----
-
-## v2.1.5 — Session 9 (2026-07-22)
-
-### Fix: Echo feedback loop creating junk files
-- **Root cause** — ConPTY used a single pipe for both input and output. The host read its own input back from the pipe, which was fed into the shell as commands. Shell output fragments became filenames.
-- **Fix** — Use TWO separate pipes: one for input (host → shell), one for output (shell → host). This isolates the data flow and eliminates the echo loop.
-- Verified working in Python, Nuitka, and PyInstaller builds — no junk files created.
-
----
-
-## v2.1.4 — Session 9 (2026-07-22)
-
-### Fix: Input not reaching ConPTY shell
-- **Root cause** — `TerminalEngine.write()` put data into `input_queue`, but ConPTY has no writer thread consuming that queue. Data was silently dropped.
-- **Fix** — When using ConPTY, `write()` now calls `self._conpty.write()` directly instead of using the queue.
-
----
-
-## v2.1.3 — Session 9 (2026-07-22)
-
-### Fix: Missing PROCESS_INFORMATION struct
-- **Root cause** — `ctypes.wintypes` does not have `PROCESS_INFORMATION`. The ConPTY engine used `wt.PROCESS_INFORMATION()` which threw `AttributeError`.
-- **Fix** — Defined `PROCESS_INFORMATION` as a ctypes Structure with `hProcess`, `hThread`, `dwProcessId`, `dwThreadId` fields.
-- Verified working in Python interpreter, Nuitka, and PyInstaller builds.
-
----
-
-## v2.1.2 — Session 9 (2026-07-22)
-
-### Fix: CreatePseudoConsole E_INVALIDARG
-- **Root cause** — `CreatePseudoConsole` was called with `COORD(0, 0)` as the console size. A zero-size console is invalid and returns `E_INVALIDARG` (0x80070057).
-- **Fix** — Pass the actual requested dimensions `(w, h)` to `CreatePseudoConsole` instead of `(0, 0)`. Removed redundant `ResizePseudoConsole` call.
-- This fix applies to all run modes: Python interpreter, PyInstaller, and Nuitka.
-
----
-
-## v2.1.1 — Session 9 (2026-07-22)
-
-### Fix: ConPTY shell not launching
-- **Root cause** — `CreateProcessW` requires a writable buffer for `lpCommandLine`, but a Python string was being passed directly. ctypes conversion was insufficient on Nuitka onefile builds.
-- **Fix** — Use `ctypes.create_unicode_buffer(cmd)` to create a proper writable buffer.
-- **Added error logging** — ConPTY now logs each API call result to errors.txt for debugging.
-- **CI fixes** — Drop Python 3.10, set fail-fast:false, add conftest.py for Qt cleanup, tag-only triggers.
-
----
-
-## v2.1.0 — Session 8 (2026-07-22)
-
-### Critical Fix: Nuitka 5-second crash
-- **Root cause** — ConPTY used `STARTUPINFOW` (basic struct) instead of `STARTUPINFOEXW`. Python's ctypes allows setting `lpAttributeList` as a Python attribute, but it was never written to the binary memory `CreateProcessW` reads. The pseudo console attribute was silently ignored, leaving the child process without a console.
-- **Fix** — Defined proper `STARTUPINFOEXW` ctypes Structure with `lpAttributeList` in the binary layout. `cb` now reflects the correct extended struct size.
-- **Removed `CREATE_NO_WINDOW`** — ConPTY owns its own console; this flag was conflicting.
-- **Fixed write path** — Changed from `WriteConsoleInputCharacterW` (console input buffer) to `WriteFile` (pipe) for correct ConPTY input.
-- **Improved read loop** — Breaks cleanly on pipe close instead of spinning.
-- **Proper cleanup** — Pipe handles closed in `kill()` to prevent handle leaks.
-
-### Cleanup
-- Removed dead winpty fallback from `terminal_core.py` (not in requirements)
-- Added comprehensive error logging throughout ConPTY lifecycle
-- All 141 tests passing
-
-### Documentation
-- Full README rewrite — accurate architecture, build instructions, test commands
-- BUILD.md updated with troubleshooting section
-- CONTRIBUTING.md updated with pytest commands and project structure
-- requirements.txt updated with minimum version pins
-
----
-
-## v2.0.0 — Session 7 (2026-07-21)
-
-### ConPTY Backend (major)
-- **ConPTY replaces winpty** — uses Windows' native Pseudo Console API via ctypes
-- **Automatic fallback** — tries ConPTY first, falls back to winpty if unavailable
-- **No more winpty dependency** — removed from requirements.txt
-- **Fixed cmd.exe crash** — winpty pipe connectivity issue caused 5-second exit; ConPTY resolves this
-- **Admin mode** — elevated processes launch via ShellExecuteW
-
-### Source Optimization
-- Removed redundant code, blank lines, excessive comments
-- One-liner patterns where appropriate
-- Streamlined error handling across all modules
-
-### Tests
-- Comprehensive keyboard input tests (all keys, Ctrl combinations, navigation)
-- Rendering pipeline tests (CR, ERASE_DISPLAY, ERASE_LINE, ANSI colors)
-- Profile management tests (add, edit, delete, admin flag)
-- Search dialog tests (find next/prev, highlight all)
-- Config tests (defaults, auto-creation, path resolution)
-
-### Documentation
-- CHANGELOG.md updated for v2.0.0
-- Roadmap.md updated
-- FIXES.md renamed to TECHNICAL_NOTES.md (in .gitignore)
-- KNOWN_ISSUES.md, CONTRIBUTING.md, BUILD.md maintained
-
-### Build
-- Nuitka onefile: ~26 MB (fast startup)
-- PyInstaller: ~44 MB (fallback)
-- Inno Setup installer
-- All three verified working
-
----
-
-## v1.6.0 — Session 6 (2026-07-21)
-
-### Config & Startup
-- **settings.toml auto-creation** — If settings.toml is missing, it's created with sensible defaults on first run
-- **Config fallback** — All settings have sensible defaults; missing config gracefully falls back
-- **errors.txt** — Only created on crash (no longer created at startup)
-
-### Search
-- **SearchDialog** — Converted from broken floating widget to proper QDialog popup
-- **F3/Shift+F3** — Next/previous match navigation
-- **All instances highlighted** — Blue highlights on all matches, counter shows position
-
-### Input & Navigation
-- **Input area**: QTextEdit handles text entry natively (characters appear there)
-- **Navigation keys**: Arrows, Home/End forwarded to shell for cursor movement
-- **Up/Down**: Forwarded to shell for command history
-- **Output area**: Read-only, normal navigation when focused
-
-### Menu & Edit
-- **Cut**: Only works in input area (output is read-only)
-- **Copy**: Works in both output and input
-- **Find**: Opens proper search dialog (F3 / Ctrl+F)
-
----
-
-## v1.5.0 — Session 5 (2026-07-21)
-
-### Search / Find
-- **F3** opens search bar or finds next match
-- **Shift+F3** finds previous match
-- Search bar now lives inside each TerminalWidget (positioned at bottom of output)
-- All matches highlighted with blue background
-- Match counter shows current/total (e.g., "3/15")
-- Enter in search field finds next, Escape or close button hides bar
-
-### Documentation
-- **KNOWN_ISSUES.md** — Known limitations and platform issues
-- **CONTRIBUTING.md** — How to contribute, project structure, building
-- **BUILD.md** — Detailed build instructions (Nuitka, PyInstaller, installer)
-- Updated CHANGELOG.md, Roadmap.md, README.md
-
-### Menu Cleanup
-- Removed duplicate shortcuts between TerminalWidget and MainWindow
-- All menu items verified working: File, Edit, View, Tools, Window
-
----
-
-## v1.4.0 — Session 5 (2026-07-21)
-
-### Build & Distribution
-- **Nuitka on CI** — GitHub Actions now builds with Nuitka (faster startup)
-- **Win10/11 x64 naming** — All release files include platform tag: `OmniTerm-win10-x64.exe`, `pyOmniTerm-win10-x64.exe`, `OmniTermSetup-win10-x64.exe`
-- **Release notes** — Auto-generated with file descriptions and requirements
-- **CI fixes** — Fixed YAML syntax, PyInstaller spec dynamic winpty detection, test runner QApplication singleton
-
-### Fixes
-- **PyInstaller spec** — Dynamic winpty DLL detection works across Python 3.10–3.13
-- **Test runner** — QApplication created once to prevent hangs on CI
-- **Distribution test** — Updated for new CI command format
-- **CI lint** — Made ruff non-blocking to avoid version mismatches
-
----
-
-## v1.3.0 — Session 4 (2026-07-20)
-
-### Build System
-- **Nuitka as default** — 7.5x faster startup (13ms vs 97ms), 2.3x smaller (18.9 MB vs 43.8 MB)
-- **PyInstaller retained** as fallback via `.\build.ps1 pyinstaller`
-- **Inno Setup installer** — Professional Windows installer with Start Menu, desktop shortcut, file associations
-- **Build modes**: `release` (Nuitka default), `pyinstaller`, `debug`, `installer`, `clean`
-
-### Installer
-- `installer/omniterm.iss` — Inno Setup script
-- Installs to Program Files, creates Start Menu and desktop shortcuts
-- Optional .toml file association
-- Post-install launch option
-- Built via `.\build.ps1 installer`
-
-### Admin & Profiles
-- **Per-tab admin indicator** — `[Admin]` badge on tab title when elevated
-- **Profile Picker** now handles admin profiles (triggers UAC)
-- **Profile Picker dialog** shows `[Admin]` badge
-- **Window title** no longer shows `[Administrator]` — indicator is per-tab
-- **Fixed duplicate tab** on admin launch (MainWindow accepts shell param)
-- **Removed info dialog** before UAC prompt (UAC is sufficient)
-
-### UI Improvements
-- **Dynamic path label** — shows current working directory from shell prompt
-- **Auto-expanding input** — grows from 28px to 120px as content increases
-- **13 themes** — Monokai, Dracula, Nord, GitHub Dark, Catppuccin Mocha, etc.
-
-### Docs
-- Updated README.md, CHANGELOG.md, Roadmap.md for v1.3.0
-
----
-
-## v1.2.0 — Session 3 (2026-07-20)
-
-### Input Widget Redesign
-- **Replaced QLineEdit with QTextEdit** for the input area — supports word wrap, multi-line display, and dynamic expansion for long commands
-- **Path label** — "PS> " or "cmd> " indicator at the left of the input area shows current shell
-- **Enter sends command**, Shift+Enter for newlines, Tab changes focus
-- **Dynamic input height** — input area expands up to 120px for long lines, word wraps at widget width
-
-### Themes
-- **13 built-in themes** (up from 3): Added Monokai, Dracula, Nord, GitHub Dark, Catppuccin Mocha, Tomorrow Night, Gruvbox Dark, Tokyo Night, Rosé Pine, Zenburn
-
-### Profile Management
-- **Profile Management UI** — Table-based dialog for add/edit/duplicate/delete profiles (File → Manage Profiles, or + dropdown)
-- **Run As Admin** — Each profile has an admin flag; triggers UAC via ShellExecuteW with "runas" verb
-- **Edit Dialog** — Form-based editor for Name, Command, Arguments, Working Dir, Admin checkbox
-- **Config persistence** — `Config.save()` writes profiles back to `settings.toml`
-- **Default admin profiles** — `cmd_admin`, `powershell_admin` in settings.toml
-- **Removed git_bash** from default profiles
-
-### UI Improvements
-- **"+" tab button** — Corner widget with dropdown listing all profiles, "Manage Profiles..." at bottom
-- **RTL toggle** — Now propagates to both output QTextEdit and input QTextEdit
-- **Word wrap** — Both output and input areas word-wrap at widget width
-
-### Fixes
-- **PowerShell doubled text** — CURSOR_POS handling for PSReadLine rewrites; `-NoProfile` flag
-- **WSL encoding** — `wsl --list --verbose` UTF-16LE decoding fixed
-- **Profile manager import error** — Missing QWidget import fixed
-
-### Removed
-- **Split panes** — Removed (didn't work with QWidget-based terminal)
-
----
-
-## v1.1.0 — Session 2 (2026-07-20)
-
-### Architecture
-- **Rewrote TerminalWidget** from single QTextEdit to QWidget with QTextEdit (output) + QLineEdit (input)
-- Moved all source files to `src/` directory
-
-### Key Fixes
-- Delete key, arrow keys, backspace all work correctly
-- cls/clear/Clear-Host via ERASE_DISPLAY
-- Exit command closes tab; last tab closes app
-- PowerShell doubled text eliminated
-
-### Tests
-- 11 test suites, 100+ tests all passing
-
----
-
-## v1.0.0 — Session 1 (2026-07-20)
-
-### Initial release
-- Multi-tab terminal with PTY (winpty), SSH, and serial support
-- ANSI color rendering (256-color, RGB, bold, italic, underline)
-- Mouse protocol support (xterm)
-- Theme system, configuration via TOML
-- Profile picker, split panes, search bar
-- Font size controls, opacity toggle, RTL support
+## v2.5.1 (2026-07-23)
+- **Fix**: `exit` command not closing tab — `kill()` now closes pipe handles to unblock `ReadFile`
+- Added `GetExitCodeProcess` safety net in `_read_loop`
+
+## v2.5.0 (2026-07-23)
+- **Fix**: Close/X button unreliable — removed `_closing` guard from `_on_tab_process_exited`
+- **Fix**: Search methods crash — `_search_next`/`_search_prev` now use parent MainWindow's tab widget
+- Reordered `_close_tab` to call `deleteLater()` before `removeTab()`
+
+## v2.4.4 (2026-07-22)
+- **Fix**: Exit command not closing tab — break on both `not ok` and `read.value == 0`
+
+## v2.4.3 (2026-07-22)
+- **Fix**: Exit/close crash — added `GetExitCodeProcess` check, removed premature pipe close
+
+## v2.4.2 (2026-07-22)
+- **Fix**: RTL toggle crash — removed reference to non-existent `_input` attribute
+- **Fix**: Exit not closing tab — `kill()` closes read pipe handle
+
+## v2.4.1 (2026-07-22)
+- **Fix**: RTL alignment — `document().setDefaultTextDirection()` for visual text movement
+- Added `faulthandler` for crash diagnosis, signal handlers for SIGTERM/SIGINT
+
+## v2.4.0 (2026-07-22)
+- Save/Export output as HTML (Ctrl+Shift+H) or Text (Ctrl+Shift+S)
+- RTL alignment fix, shutdown safety (`_closing` flag, `_killed` guard)
+- CI: Added Windows ARM64 and Linux ARM64 builds
+
+## v2.3.0 (2026-07-22)
+- CI/CD: Full cross-platform builds (6 platforms: Windows/Linux/macOS x64+ARM64)
+
+## v2.2.0 (2026-07-22)
+- **Major**: Unified TerminalScreen widget (single-pane architecture)
+- Arabic shaping + bidirectional text, cross-platform PTY (ConPTY + pty)
+- Dynamic i18n (English/Arabic), CWD path resolution
+
+## v2.1.0–v2.1.6 (2026-07-22)
+- ConPTY backend fixes: STARTUPINFOEXW struct, COORD dimensions, PROCESS_INFORMATION, writable buffer, two-pipe architecture, direct write path, arrow key handling
+- Removed winpty dependency
+
+## v2.0.0 (2026-07-21)
+- **Major**: ConPTY backend replaces winpty — native Windows Pseudo Console API
+- Source optimization, comprehensive test suite (141 tests)
+
+## v1.0.0–v1.6.0 (2026-07-20–21)
+- Initial release through config fallback, search dialog, input fixes
+- Profile management, 13 themes, Nuitka build, Inno Setup installer
