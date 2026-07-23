@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.5.4 (2026-07-23)
+- **Fix**: Windows CLI `--version` output with robust handle translation
+- **Fix**: Tab close / engine exits are now thread-safe via Qt signals and widget mapping
+- Removed unused local variables and dead code
+
 ## v2.5.3 (2026-07-23)
 - Removed issue markdown files (tracked as GitHub Issues #3-#6)
 - Version bump to 2.5.3

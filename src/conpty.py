@@ -6,7 +6,11 @@ output (shell → host), preventing echo feedback loops.
 from __future__ import annotations
 import ctypes
 import ctypes.wintypes as wt
-import os, sys, threading, time, traceback
+import os
+import sys
+import threading
+import time
+import traceback
 from dataclasses import dataclass
 from PyQt6.QtCore import QObject, pyqtSignal
 

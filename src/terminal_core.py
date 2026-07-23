@@ -1,6 +1,12 @@
 """Terminal engine — manages local PTY and SSH sessions."""
 from __future__ import annotations
-import threading, time, queue, logging, traceback, sys, os
+import threading
+import time
+import queue
+import logging
+import traceback
+import sys
+import os
 from PyQt6.QtCore import QObject, pyqtSignal
 
 log = logging.getLogger(__name__)
@@ -101,7 +107,8 @@ class TerminalEngine:
         self.signals.exited.emit(msg)
 
     def _start_elevated(self, cmd: str) -> bool:
-        import ctypes, shlex
+        import ctypes
+        import shlex
         _elog(f"Starting elevated: {cmd!r}")
         try:
             parts = shlex.split(cmd)

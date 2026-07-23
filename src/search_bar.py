@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from PyQt6.QtWidgets import (
     QDialog, QHBoxLayout, QLineEdit, QLabel, QPushButton,
-    QTextEdit, QVBoxLayout,
+    QTextEdit,
 )
 from PyQt6.QtGui import QTextCursor, QTextCharFormat, QColor, QTextDocument
 from PyQt6.QtCore import Qt

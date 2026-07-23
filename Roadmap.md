@@ -1,6 +1,6 @@
 # OmniTerm Roadmap
 
-## Current Status — v2.5.3
+## Current Status — v2.5.4
 
 Stable release with ConPTY backend, cross-platform builds (6 platforms), unified terminal screen, Arabic/bidi support, and 145 tests passing.
 

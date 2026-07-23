@@ -40,16 +40,18 @@ def test_tab_engines_dict():
     """Tab engines dict should track engine instances."""
     # Simulate what MainWindow does
     engines = {}
-    engines[0] = "engine_a"
-    engines[1] = "engine_b"
-    assert engines[0] == "engine_a"
-    assert engines[1] == "engine_b"
+    widget_a = "widget_a"
+    widget_b = "widget_b"
+    engines[widget_a] = "engine_a"
+    engines[widget_b] = "engine_b"
+    assert engines[widget_a] == "engine_a"
+    assert engines[widget_b] == "engine_b"
     assert len(engines) == 2
 
     # Simulate tab close
-    engines.pop(0, None)
+    engines.pop(widget_a, None)
     assert len(engines) == 1
-    assert 0 not in engines
+    assert widget_a not in engines
     print("  PASS: Tab engines dict tracking")
 
 

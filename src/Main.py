@@ -4,7 +4,6 @@ import traceback
 import faulthandler
 import signal
 import argparse
-import logging
 from pathlib import Path
 
 # Add src/ to path so sibling modules are importable
@@ -88,8 +87,27 @@ def run():
     args = parse_args()
 
     if args.version:
-        # For GUI apps, print to stdout (visible when run from terminal)
+        if getattr(sys, "frozen", False) and os.name == "nt":
+            import ctypes
+            import msvcrt
+            # Try to attach to the parent console (e.g. cmd.exe, powershell.exe)
+            attached = ctypes.windll.kernel32.AttachConsole(-1)
+            if not attached:
+                # If not run from an existing console, allocate a new one
+                ctypes.windll.kernel32.AllocConsole()
+            # Redirect standard streams using robust OS file handle translation
+            stdout_handle = ctypes.windll.kernel32.GetStdHandle(-11)
+            stderr_handle = ctypes.windll.kernel32.GetStdHandle(-12)
+            if stdout_handle:
+                fd_out = msvcrt.open_osfhandle(stdout_handle, os.O_WRONLY)
+                sys.stdout = open(fd_out, "w", encoding="utf-8", closefd=False)
+            if stderr_handle:
+                fd_err = msvcrt.open_osfhandle(stderr_handle, os.O_WRONLY)
+                sys.stderr = open(fd_err, "w", encoding="utf-8", closefd=False)
+        # Print version (will be visible on attached/allocated console or standard terminal)
         print(f"OmniTerm v{VERSION}")
+        if sys.stdout:
+            sys.stdout.flush()
         sys.exit(0)
 
     if args.verbose:

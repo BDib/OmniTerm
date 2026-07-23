@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
-import logging
 from PyQt6.QtWidgets import (
     QMainWindow, QTextEdit, QApplication, QInputDialog,
-    QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
-    QFrame, QToolButton, QLabel, QMenu, QMessageBox,
+    QWidget, QVBoxLayout, QTabWidget,
+    QToolButton, QMenu, QMessageBox,
 )
-from PyQt6.QtCore import Qt, pyqtSlot, QSettings, QPoint
+from PyQt6.QtCore import Qt, pyqtSlot, QSettings, QPoint, pyqtSignal
 from PyQt6.QtGui import (
     QTextCursor,
     QKeySequence,
     QShortcut,
     QMouseEvent,
     QTextOption,
-    QColor,
 )
 
 from config import VERSION
@@ -154,8 +152,6 @@ class TerminalWidget(QWidget):
         key = event.key()
         mods = event.modifiers()
         ctrl = bool(mods & Qt.KeyboardModifier.ControlModifier)
-        shift = bool(mods & Qt.KeyboardModifier.ShiftModifier)
-        alt = bool(mods & Qt.KeyboardModifier.AltModifier)
 
         # 1. Map Ctrl combos
         if ctrl:
@@ -453,11 +449,13 @@ class TerminalWidget(QWidget):
             self._output.setTextCursor(cursor)
             self._output.ensureCursorVisible()
         except Exception as exc:
-            import traceback, os, sys
+            import traceback
+            import os
+            import sys
             try:
                 d = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
                 with open(os.path.join(d, "errors.txt"), "a", encoding="utf-8") as f:
-                    f.write(f"\n=== show_exit_message crash ===\n")
+                    f.write("\n=== show_exit_message crash ===\n")
                     traceback.print_exception(type(exc), exc, exc.__traceback__, file=f)
                     f.write("\n")
             except Exception:
@@ -617,14 +615,16 @@ class MainWindow(QMainWindow):
 
     Each tab contains its own TerminalWidget + TerminalEngine.
     """
+    tab_process_exited_signal = pyqtSignal(object)
 
     def __init__(self, cfg=None, plain_mode=False, shell=None, cwd=None):
         super().__init__()
         self._cfg = cfg
         self._plain_mode = plain_mode
         self._settings = QSettings("OmniTerm", "OmniTerm")
-        self._tab_engines: dict[int, "TerminalEngine"] = {}  # noqa: F821
+        self._tab_engines: dict[TerminalWidget, "TerminalEngine"] = {}  # noqa: F821
         self._closing = False
+        self.tab_process_exited_signal.connect(self._on_tab_process_exited)
 
         # Detect if running as admin
         self._is_admin = self._check_admin()
@@ -732,7 +732,6 @@ class MainWindow(QMainWindow):
     def _launch_as_admin(self, profile):
         """Relaunch OmniTerm as admin, auto-opening the given profile."""
         import ctypes
-        import sys
         import os
 
         # Find the profile name
@@ -992,8 +991,8 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            engine = self._tab_engines.pop(index, None)
             widget = self._tabs.widget(index)
+            engine = self._tab_engines.pop(widget, None) if widget else None
 
             if engine:
                 try:
@@ -1008,7 +1007,9 @@ class MainWindow(QMainWindow):
                 widget.deleteLater()
             self._tabs.removeTab(index)
         except Exception as exc:
-            import traceback, os, sys
+            import traceback
+            import os
+            import sys
             try:
                 d = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
                 with open(os.path.join(d, "errors.txt"), "a", encoding="utf-8") as f:
@@ -1076,11 +1077,13 @@ class MainWindow(QMainWindow):
             if idx >= 0:
                 self._close_tab(idx)
         except Exception as exc:
-            import traceback, os, sys
+            import traceback
+            import os
+            import sys
             try:
                 d = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
                 with open(os.path.join(d, "errors.txt"), "a", encoding="utf-8") as f:
-                    f.write(f"\n=== _on_tab_process_exited crash ===\n")
+                    f.write("\n=== _on_tab_process_exited crash ===\n")
                     traceback.print_exception(type(exc), exc, exc.__traceback__, file=f)
                     f.write("\n")
             except Exception:
@@ -1133,11 +1136,11 @@ class MainWindow(QMainWindow):
         terminal.parent_engine = engine
         engine.signals.text_ready.connect(terminal.append_shell_text)
         engine.signals.exited.connect(terminal.show_exit_message)
-        engine.signals.exited.connect(lambda _: self._on_tab_process_exited(terminal))
+        engine.signals.exited.connect(lambda _: self.tab_process_exited_signal.emit(terminal))
 
         title = f"ssh:{username}@{host}"
         idx = self._tabs.addTab(terminal, title)
-        self._tab_engines[idx] = engine
+        self._tab_engines[terminal] = engine
         self._tabs.setCurrentIndex(idx)
 
         success = engine.start_ssh(
@@ -1178,11 +1181,11 @@ class MainWindow(QMainWindow):
         terminal.parent_engine = engine
         engine.signals.text_ready.connect(terminal.append_shell_text)
         engine.signals.exited.connect(terminal.show_exit_message)
-        engine.signals.exited.connect(lambda _: self._on_tab_process_exited(terminal))
+        engine.signals.exited.connect(lambda _: self.tab_process_exited_signal.emit(terminal))
 
         title = f"serial:{port}"
         idx = self._tabs.addTab(terminal, title)
-        self._tab_engines[idx] = engine
+        self._tab_engines[terminal] = engine
         self._tabs.setCurrentIndex(idx)
 
         success = engine.start_serial(
@@ -1236,7 +1239,7 @@ class MainWindow(QMainWindow):
         terminal.parent_engine = engine
         engine.signals.text_ready.connect(terminal.append_shell_text)
         engine.signals.exited.connect(terminal.show_exit_message)
-        engine.signals.exited.connect(lambda _: self._on_tab_process_exited(terminal))
+        engine.signals.exited.connect(lambda _: self.tab_process_exited_signal.emit(terminal))
 
         if wsl:
             cmd = WSLManager.get_shell_command(distribution)
@@ -1250,7 +1253,7 @@ class MainWindow(QMainWindow):
             title += " [Admin]"
 
         idx = self._tabs.addTab(terminal, title)
-        self._tab_engines[idx] = engine
+        self._tab_engines[terminal] = engine
         self._tabs.setCurrentIndex(idx)
 
         # Start the engine passing custom working directory (CWD)
@@ -1328,7 +1331,7 @@ class MainWindow(QMainWindow):
             self.restoreState(state)
 
     def closeEvent(self, event):
-        import traceback, os, sys
+        import traceback
         try:
             self._closing = True
             self.kill_all_engines()
@@ -1339,7 +1342,7 @@ class MainWindow(QMainWindow):
             try:
                 d = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
                 with open(os.path.join(d, "errors.txt"), "a", encoding="utf-8") as f:
-                    f.write(f"\n=== closeEvent crash ===\n")
+                    f.write("\n=== closeEvent crash ===\n")
                     traceback.print_exception(type(exc), exc, exc.__traceback__, file=f)
                     f.write("\n")
             except Exception:
@@ -1362,11 +1365,13 @@ class MainWindow(QMainWindow):
                     pass
             self._tab_engines.clear()
         except Exception as exc:
-            import traceback, os, sys
+            import traceback
+            import os
+            import sys
             try:
                 d = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.getcwd()
                 with open(os.path.join(d, "errors.txt"), "a", encoding="utf-8") as f:
-                    f.write(f"\n=== kill_all_engines crash ===\n")
+                    f.write("\n=== kill_all_engines crash ===\n")
                     traceback.print_exception(type(exc), exc, exc.__traceback__, file=f)
                     f.write("\n")
             except Exception:
