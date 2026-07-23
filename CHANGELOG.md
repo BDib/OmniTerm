@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.5.2 — Session 10 (2026-07-23)
+
+### Tests: Exit fix verification
+- Added `test_exit_fix.py` with 3 integration tests:
+  - `test_exit_closes_tab` — typing `exit` fires `exited` signal within 3s
+  - `test_kill_unblocks_read_loop` — `kill()` closes pipes and unblocks `ReadFile`
+  - `test_exit_closes_tab_integration` — full `TerminalEngine` + ConPTY signal chain
+- All 145 tests passing
+
+---
+
 ## v2.5.1 — Session 10 (2026-07-23)
 
 ### Fix: Exit command not closing tab (root cause)
