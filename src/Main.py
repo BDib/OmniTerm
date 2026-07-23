@@ -89,25 +89,20 @@ def run():
     if args.version:
         if getattr(sys, "frozen", False) and os.name == "nt":
             import ctypes
-            import msvcrt
-            # Try to attach to the parent console (e.g. cmd.exe, powershell.exe)
-            attached = ctypes.windll.kernel32.AttachConsole(-1)
-            if not attached:
-                # If not run from an existing console, allocate a new one
-                ctypes.windll.kernel32.AllocConsole()
-            # Redirect standard streams using robust OS file handle translation
-            stdout_handle = ctypes.windll.kernel32.GetStdHandle(-11)
-            stderr_handle = ctypes.windll.kernel32.GetStdHandle(-12)
-            if stdout_handle:
-                fd_out = msvcrt.open_osfhandle(stdout_handle, os.O_WRONLY)
-                sys.stdout = open(fd_out, "w", encoding="utf-8", closefd=False)
-            if stderr_handle:
-                fd_err = msvcrt.open_osfhandle(stderr_handle, os.O_WRONLY)
-                sys.stderr = open(fd_err, "w", encoding="utf-8", closefd=False)
-        # Print version (will be visible on attached/allocated console or standard terminal)
-        print(f"OmniTerm v{VERSION}")
-        if sys.stdout:
-            sys.stdout.flush()
+            k32 = ctypes.windll.kernel32
+            # Try to attach to parent console (cmd.exe/powershell), else allocate one
+            if not k32.AttachConsole(-1):
+                k32.AllocConsole()
+            # Write directly to console handle — bypasses Python stdout entirely
+            h = k32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+            if h and h != -1:  # INVALID_HANDLE_VALUE
+                msg = f"OmniTerm v{VERSION}\n".encode("utf-8")
+                written = ctypes.c_ulong(0)
+                k32.WriteFile(h, msg, len(msg), ctypes.byref(written), None)
+            else:
+                print(f"OmniTerm v{VERSION}")
+        else:
+            print(f"OmniTerm v{VERSION}")
         sys.exit(0)
 
     if args.verbose:
