@@ -18,27 +18,34 @@ The signal chain should work as follows:
 5. `_close_tab` closes the tab (or calls `self.close()` for last tab)
 
 The bugs were:
-1. **`_on_tab_process_exited` returned early when `_closing` was True** — When the user clicks X to close the window, `closeEvent` sets `_closing = True` and calls `kill_all_engines()`. This triggers `ConPTYEngine.kill()` → `TerminateProcess` → `_read_loop` breaks → `exited` signal fires → `_on_tab_process_exited` is called — but it returned immediately because `_closing` was already True, so the tab was never cleaned up before the window closed.
-2. **`deleteLater()` after `removeTab()`** — The widget was removed from tabs before it was deleted, which could cause signal delivery issues.
-3. **Search methods referenced `self._tabs`** — `_search_next` and `_search_prev` in `TerminalWidget` referenced `self._tabs` which doesn't exist on `TerminalWidget` (it's on `MainWindow`).
+1. **`kill()` did not close pipe handles** — When the user types `exit`, the shell terminates but `ReadFile` blocks forever on the still-open pipe. The `exited` signal never fires, so the tab never closes.
+2. **`_on_tab_process_exited` returned early when `_closing` was True** — When closing the window, `closeEvent` set `_closing = True` and called `kill_all_engines()`. The exit signal would fire but `_on_tab_process_exited` returned early.
+3. **`deleteLater()` after `removeTab()`** — The widget was removed from tabs before it was deleted, causing signal delivery issues.
+4. **Search methods referenced `self._tabs`** — `_search_next` and `_search_prev` in `TerminalWidget` referenced `self._tabs` which doesn't exist on `TerminalWidget`.
 
-## Fix (v2.5.0)
+## Fix (v2.5.1)
 
-1. Removed the `_closing` check from `_on_tab_process_exited` — the method now always attempts to close the tab if it exists, regardless of the `_closing` state.
-2. Reordered `_close_tab` to call `deleteLater()` before `removeTab()` to prevent signal delivery issues.
-3. Fixed `_search_next` and `_search_prev` in `TerminalWidget` to access the parent `MainWindow`'s tab widget correctly.
+1. `kill()` now closes pipe handles (`h_read`, `h_write`) after terminating the process. This unblocks `ReadFile` which catches the broken-pipe error and exits cleanly.
+2. Added `GetExitCodeProcess` check in `_read_loop` as a safety net to detect process termination even if pipe reads stall.
+3. Removed the `_closing` check from `_on_tab_process_exited`.
+4. Reordered `_close_tab` to call `deleteLater()` before `removeTab()`.
+5. Fixed `_search_next` and `_search_prev` in `TerminalWidget` to access the parent `MainWindow`'s tab widget correctly.
 
 ## Files Changed
 
+- `src/conpty.py` — `kill()`, `_read_loop()`
 - `src/terminal_ui.py` — `_on_tab_process_exited()`, `_close_tab()`, `_search_next()`, `_search_prev()`
+- `src/config.py` — Version bump to 2.5.1
 
 ## Testing
 
 - All 142 tests pass
+- Nuitka build: 32.2 MB (working)
+- PyInstaller build: 48.8 MB (working)
 - Verified: exit command closes tab, last tab exit closes window, X button and Alt+F4 work reliably
 
 ## Environment
 
 - Windows 11, Python 3.13
-- Built with PyInstaller (also affects Nuitka and Python interpreter runs)
-- v2.5.0
+- Built with Nuitka and PyInstaller
+- v2.5.1
