@@ -42,6 +42,8 @@ _TRANSLATIONS = {
         "select_theme": "Select Theme",
         "theme_label": "Theme:",
         "restart_shell": "Restart Shell",
+        "menu_help": "&Help",
+        "menu_about": "&About OmniTerm",
     },
     "ar": {
         "menu_file": "ملف",
@@ -81,6 +83,8 @@ _TRANSLATIONS = {
         "select_theme": "اختر سمة",
         "theme_label": "السمة:",
         "restart_shell": "إعادة تشغيل الطرفية",
+        "menu_help": "مساعدة",
+        "menu_about": "حول OmniTerm",
     }
 }
 

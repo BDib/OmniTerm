@@ -75,9 +75,9 @@ def parse_args():
                         help="Disable ANSI color rendering")
     parser.add_argument("--profile", "-p", default=None,
                         help="Open with a named profile from settings.toml")
-    parser.add_argument("--verbose", "-v", action="store_true",
+    parser.add_argument("--verbose", action="store_true",
                         help="Log startup details to errors.txt")
-    parser.add_argument("--version", "-V", action="version",
+    parser.add_argument("--version", "-v", action="version",
                         version=f"OmniTerm v{VERSION}")
     parser.add_argument("path", nargs="?", default=None,
                         help="Optional initial working directory path to start OmniTerm in")

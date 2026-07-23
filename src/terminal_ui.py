@@ -5,7 +5,7 @@ import logging
 from PyQt6.QtWidgets import (
     QMainWindow, QTextEdit, QApplication, QInputDialog,
     QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
-    QFrame, QToolButton, QLabel, QMenu,
+    QFrame, QToolButton, QLabel, QMenu, QMessageBox,
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QSettings, QPoint
 from PyQt6.QtGui import (
@@ -17,6 +17,7 @@ from PyQt6.QtGui import (
     QColor,
 )
 
+from config import VERSION
 from themes import get_theme, list_themes
 from ansi_parser import parse_ansi, SpanKind, strip_ansi
 from ansi_renderer import span_to_format
@@ -627,7 +628,7 @@ class MainWindow(QMainWindow):
 
         # Detect if running as admin
         self._is_admin = self._check_admin()
-        self.setWindowTitle("OmniTerm")
+        self.setWindowTitle(f"OmniTerm v{VERSION}")
         self._apply_config()
         self._restore_geometry()
 
@@ -837,6 +838,9 @@ class MainWindow(QMainWindow):
         self._action_next_tab = _act(self._win_menu, "", self._next_tab, "Ctrl+Tab")
         self._action_prev_tab = _act(self._win_menu, "", self._prev_tab, "Ctrl+Shift+Tab")
 
+        self._help_menu = menu.addMenu("")
+        self._action_about = _act(self._help_menu, "", self._show_about)
+
     def _set_language(self, lang_code: str):
         """Set the active translation language and refresh the UI."""
         if self._cfg:
@@ -888,6 +892,9 @@ class MainWindow(QMainWindow):
         self._action_next_tab.setText(t("menu_next_tab", lang))
         self._action_prev_tab.setText(t("menu_prev_tab", lang))
 
+        self._help_menu.setTitle(t("menu_help", lang))
+        self._action_about.setText(t("menu_about", lang))
+
         # Dynamic layout direction
         if lang == "ar":
             self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
@@ -921,6 +928,20 @@ class MainWindow(QMainWindow):
         widget = self._tabs.currentWidget()
         if isinstance(widget, TerminalWidget):
             widget._paste_clipboard()
+
+    def _show_about(self):
+        """Show the About dialog."""
+        QMessageBox.about(
+            self,
+            f"About OmniTerm v{VERSION}",
+            f"<h3>OmniTerm v{VERSION}</h3>"
+            "<p>A modern, cross-platform terminal emulator built with Python and PyQt6.</p>"
+            "<p>Features: ConPTY backend, ANSI color rendering, Arabic/bidi support, "
+            "13 themes, multi-tab, SSH/Serial/WSL integration.</p>"
+            "<p>License: MIT</p>"
+            "<p>GitHub: <a href='https://github.com/BDib/OmniTerm'>github.com/BDib/OmniTerm</a></p>"
+            "<p>Author: BDib (Buddy)</p>"
+        )
 
     def _toggle_rtl_line(self):
         """Manually toggle the current output line alignment (Right-to-Left / Left-to-Right)."""
