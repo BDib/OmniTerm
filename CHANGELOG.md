@@ -1,5 +1,14 @@
 # Changelog
 
+## v2.5.1 — Session 10 (2026-07-23)
+
+### Fix: Exit command not closing tab (root cause)
+- **Root cause**: `ConPTYEngine.kill()` did not close pipe handles. When user types `exit`, shell terminates but `ReadFile` in `_read_loop` blocks forever on the still-open pipe. The `exited` signal never fires, so the tab never closes.
+- **Fix**: `kill()` now closes pipe handles (`h_read`, `h_write`) after terminating the process. This unblocks `ReadFile` which catches the broken-pipe error and exits cleanly.
+- **Safety net**: Added `GetExitCodeProcess` check in `_read_loop` to detect process termination even if pipe reads stall.
+
+---
+
 ## v2.5.0 — Session 10 (2026-07-23)
 
 ### Fix: Exit/close reliability

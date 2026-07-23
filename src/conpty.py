@@ -116,8 +116,15 @@ class ConPTYEngine(QObject):
                         k32.CloseHandle(h)
                     except Exception:
                         pass
-            # Don't close pipe handles — let OS clean up when process exits
-            # Closing while ReadFile blocks causes C-level crash
+            # Close pipe handles to unblock ReadFile in _read_loop.
+            # The read loop catches the ERROR_OPERATION_ABORTED / broken-pipe
+            # error and exits cleanly.
+            for h in (s.h_read, s.h_write):
+                if h:
+                    try:
+                        k32.CloseHandle(h)
+                    except Exception:
+                        pass
 
     def _create_console(self, cmd: str, w: int, h: int, cwd: str | None = None) -> ConPTYSession:
         s = ConPTYSession()
@@ -188,6 +195,7 @@ class ConPTYEngine(QObject):
             return
         buf = (ctypes.c_char * 4096)()
         read = wt.DWORD(0)
+        STILL_ACTIVE = 259
         time.sleep(0.3)
         while self._alive:
             try:
@@ -196,10 +204,16 @@ class ConPTYEngine(QObject):
                     chunk = buf[:read.value].decode("utf-8", errors="replace")
                     self.text_ready.emit(chunk)
                 else:
-                    # Either ReadFile failed (pipe closed) or returned 0 bytes (EOF)
+                    # Either ReadFile failed (pipe closed / handle invalidated) or 0 bytes (EOF)
                     break
             except Exception:
                 break
+            # Safety net: check if process exited (breaks stale pipe reads)
+            if s.h_process:
+                exit_code = wt.DWORD(0)
+                if k32.GetExitCodeProcess(s.h_process, ctypes.byref(exit_code)):
+                    if exit_code.value != STILL_ACTIVE:
+                        break
             time.sleep(0.01)
         self._alive = False
         self.exited.emit("[Process exited]")
