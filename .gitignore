@@ -21,6 +21,7 @@ dist_nuitka/
 OUT/
 output/
 installer_output/
+BIN/
 *.spec.bak
 *.manifest
 nuitka-crash-report.xml
