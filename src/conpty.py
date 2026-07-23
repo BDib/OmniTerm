@@ -2,6 +2,8 @@
 
 Uses TWO separate pipes: one for input (host → shell) and one for
 output (shell → host), preventing echo feedback loops.
+Uses OVERLAPPED I/O for the read pipe so we can cancel pending reads
+from kill() — synchronous ReadFile cannot be cancelled from another thread.
 """
 from __future__ import annotations
 import ctypes
@@ -11,19 +13,19 @@ import sys
 import threading
 import time
 import traceback
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from PyQt6.QtCore import QObject, pyqtSignal
 
 PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = 0x00020016
 EXTENDED_STARTUPINFO_PRESENT_FLAG = 0x00080000
 STARTF_USESTDHANDLES = 0x00000100
+ERROR_OPERATION_ABORTED = 995
+ERROR_IO_INCOMPLETE = 996
+WAIT_OBJECT_0 = 0
+WAIT_TIMEOUT = 0x102
+INFINITE = 0xFFFFFFFF
 
 k32 = ctypes.windll.kernel32
-# ClosePseudoConsole is needed to properly release conhost.exe
-try:
-    _ClosePseudoConsole = k32.ClosePseudoConsole
-except AttributeError:
-    _ClosePseudoConsole = None
 
 
 def _elog(msg: str):
@@ -56,6 +58,15 @@ class PROCESS_INFORMATION(ctypes.Structure):
         ("dwProcessId", wt.DWORD), ("dwThreadId", wt.DWORD),
     ]
 
+class OVERLAPPED(ctypes.Structure):
+    _fields_ = [
+        ("Internal", ctypes.c_ulong),
+        ("InternalHigh", ctypes.c_ulong),
+        ("Offset", wt.DWORD),
+        ("OffsetHigh", wt.DWORD),
+        ("hEvent", wt.HANDLE),
+    ]
+
 @dataclass
 class ConPTYSession:
     h_console: int = 0
@@ -63,6 +74,7 @@ class ConPTYSession:
     h_write: int = 0
     h_process: int = 0
     h_thread: int = 0
+    read_event: int = 0  # event for overlapped read cancellation
 
 
 class ConPTYEngine(QObject):
@@ -111,33 +123,63 @@ class ConPTYEngine(QObject):
         self._alive = False
         s = self._session
         self._session = None
-        if s:
-            # Terminate process (ignore errors — may already be dead)
-            if s.h_process:
+        if not s:
+            return
+
+        # 1. Terminate the child process
+        if s.h_process:
+            try:
+                k32.TerminateProcess(s.h_process, 0)
+            except Exception:
+                pass
+            # Wait briefly for process to actually exit
+            k32.WaitForSingleObject(s.h_process, 500)
+
+        # 2. Cancel any pending overlapped ReadFile — this unblocks the reader thread
+        if s.h_read and s.read_event:
+            try:
+                k32.CancelIoEx(s.h_read, None)
+            except Exception:
+                pass
+            # Signal the event so WaitForSingleObject returns
+            try:
+                k32.SetEvent(s.read_event)
+            except Exception:
+                pass
+
+        # 3. Close the read event
+        if s.read_event:
+            try:
+                k32.CloseHandle(s.read_event)
+            except Exception:
+                pass
+
+        # 4. Close pipe handles
+        for h in (s.h_read, s.h_write):
+            if h:
                 try:
-                    k32.TerminateProcess(s.h_process, 0)
+                    k32.CloseHandle(h)
                 except Exception:
                     pass
-            # Close pipe handles first to unblock ReadFile in _read_loop
-            for h in (s.h_read, s.h_write):
-                if h:
-                    try:
-                        k32.CloseHandle(h)
-                    except Exception:
-                        pass
-            # Close pseudo console — this releases conhost.exe
-            if s.h_console and _ClosePseudoConsole:
+
+        # 5. Close pseudo console — releases conhost.exe
+        if s.h_console:
+            try:
+                k32.ClosePseudoConsole(s.h_console)
+            except (AttributeError, Exception):
+                pass
+
+        # 6. Close process/thread handles
+        for h in (s.h_process, s.h_thread):
+            if h:
                 try:
-                    _ClosePseudoConsole(s.h_console)
+                    k32.CloseHandle(h)
                 except Exception:
                     pass
-            # Close process/thread handles
-            for h in (s.h_process, s.h_thread):
-                if h:
-                    try:
-                        k32.CloseHandle(h)
-                    except Exception:
-                        pass
+
+        # 7. Wait for reader thread to finish (with timeout)
+        if self._reader and self._reader.is_alive():
+            self._reader.join(timeout=2.0)
 
     def _create_console(self, cmd: str, w: int, h: int, cwd: str | None = None) -> ConPTYSession:
         s = ConPTYSession()
@@ -200,6 +242,10 @@ class ConPTYEngine(QObject):
         k32.CloseHandle(h_in_read)
         k32.CloseHandle(h_out_write)
 
+        # Create an event for overlapped reads — lets us cancel pending I/O
+        read_event = k32.CreateEventW(None, True, False, None)
+        s.read_event = read_event if read_event else 0
+
         return s
 
     def _read_loop(self) -> None:
@@ -207,26 +253,59 @@ class ConPTYEngine(QObject):
         if not s:
             return
         buf = (ctypes.c_char * 4096)()
+        overlapped = OVERLAPPED()
+        if s.read_event:
+            overlapped.hEvent = s.read_event
         read = wt.DWORD(0)
         STILL_ACTIVE = 259
         time.sleep(0.3)
         while self._alive:
             try:
-                ok = k32.ReadFile(s.h_read, buf, len(buf), ctypes.byref(read), None)
-                if ok and read.value > 0:
-                    chunk = buf[:read.value].decode("utf-8", errors="replace")
-                    self.text_ready.emit(chunk)
+                # Reset the event before each read
+                if s.read_event:
+                    k32.ResetEvent(s.read_event)
+                # Overlapped read — we wait on the event so we can cancel
+                ok = k32.ReadFile(s.h_read, buf, len(buf), ctypes.byref(read), ctypes.byref(overlapped))
+                if ok:
+                    # Read completed immediately
+                    if read.value > 0:
+                        chunk = buf[:read.value].decode("utf-8", errors="replace")
+                        self.text_ready.emit(chunk)
+                    else:
+                        break
                 else:
-                    # Either ReadFile failed (pipe closed / handle invalidated) or 0 bytes (EOF)
-                    break
+                    err = ctypes.GetLastError()
+                    if err == 997:  # ERROR_IO_PENDING — wait for completion
+                        wait_rc = k32.WaitForSingleObject(s.read_event, 200)
+                        if wait_rc == WAIT_OBJECT_0:
+                            # Read completed — get result
+                            transferred = wt.DWORD(0)
+                            k32.GetOverlappedResult(s.h_read, ctypes.byref(overlapped), ctypes.byref(transferred), False)
+                            if transferred.value > 0:
+                                chunk = buf[:transferred.value].decode("utf-8", errors="replace")
+                                self.text_ready.emit(chunk)
+                            else:
+                                break
+                        elif wait_rc == WAIT_TIMEOUT:
+                            # Timed out — check if we should still be alive
+                            continue
+                        else:
+                            # Abandoned or error — exit
+                            break
+                    elif err == ERROR_OPERATION_ABORTED:
+                        # Cancelled by kill() — exit
+                        break
+                    elif err == 109:  # ERROR_BROKEN_PIPE
+                        break
+                    else:
+                        break
             except Exception:
                 break
-            # Safety net: check if process exited (breaks stale pipe reads)
+            # Safety net: check if process exited
             if s.h_process:
                 exit_code = wt.DWORD(0)
                 if k32.GetExitCodeProcess(s.h_process, ctypes.byref(exit_code)):
                     if exit_code.value != STILL_ACTIVE:
                         break
-            time.sleep(0.01)
         self._alive = False
         self.exited.emit("[Process exited]")
